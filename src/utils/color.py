@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, EnumMeta
-from typing import overload
+from typing import cast, overload
 
 
 @dataclass
@@ -17,13 +17,13 @@ class ColorMeta(EnumMeta):
     @overload
     def __getitem__(cls, item: slice) -> list[ColorItem]: ...
     def __getitem__(cls, item: int | str | slice) -> ColorItem | list[ColorItem]:
+        members = list(cls.__members__.values())
         if isinstance(item, slice):
-            members = list(cls.__members__.values())
-            return [m.value for m in members[item]]
+            return [cast(ColorItem, getattr(m, "value")) for m in members[item]]
         elif isinstance(item, int):
-            return list(cls.__members__.values())[item].value
+            return cast(ColorItem, getattr(members[item], "value"))
         elif isinstance(item, str):
-            return cls.__members__[item].value
+            return cast(ColorItem, getattr(cls.__members__[item], "value"))
 
 
 class Color(Enum, metaclass=ColorMeta):
@@ -58,19 +58,19 @@ class Color(Enum, metaclass=ColorMeta):
     )
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.value.name
 
     @property
-    def name_zh(self):
+    def name_zh(self) -> str:
         return self.value.name_zh
 
     @property
-    def hex(self):
+    def hex(self) -> str:
         return self.value.hex
 
     @property
-    def rgb(self):
+    def rgb(self) -> tuple[int, int, int]:
         return self.value.rgb
 
     @staticmethod
@@ -84,7 +84,10 @@ class Color(Enum, metaclass=ColorMeta):
         """Convert hex color string to RGB tuple."""
         value = hex_str.lstrip("#")
         lv = len(value)
-        return tuple(int(value[i : i + lv // 3], 16) for i in range(0, lv, lv // 3))
+        r = int(value[0 : lv // 3], 16)
+        g = int(value[lv // 3 : 2 * lv // 3], 16)
+        b = int(value[2 * lv // 3 :], 16)
+        return (r, g, b)
 
 
 if __name__ == "__main__":
