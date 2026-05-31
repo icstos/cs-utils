@@ -18,8 +18,8 @@ import sys
 
 sys.modules.setdefault("git", fake_git)
 
-import cs_utils.git as gitmod
-from cs_utils.git import GitRepo
+import utils.git as gitmod
+from utils.git import GitRepo
 
 
 class FakeGit:

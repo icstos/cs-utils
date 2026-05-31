@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from cs_utils.json import Json
+from utils.json import Json
 
 
 def test_dumps_datetime_and_date_and_bytes():
@@ -39,7 +39,10 @@ def test_save_and_load_file(tmp_path: Path):
 
 
 def test_numpy_support_or_skip():
-    np = pytest.importorskip("numpy")
+    try:
+        np = pytest.importorskip("numpy")
+    except OverflowError:
+        pytest.skip("numpy is not compatible with this Python version")
 
     arr = np.array([1, 2, 3])
     obj = {"arr": arr, "n": np.int64(5), "f": np.float64(3.14)}

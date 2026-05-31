@@ -5,7 +5,7 @@ from typing import Any
 
 try:
     import numpy as np
-except ImportError:  # pragma: no cover - optional dependency
+except (ImportError, OverflowError):  # pragma: no cover - optional / platform quirks
     np = None
 
 
