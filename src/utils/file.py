@@ -575,7 +575,7 @@ class File:
     # ---- async I/O ----
 
     @staticmethod
-    async def save_file(file_obj, file_path: str) -> None:
+    async def save(file_obj, file_path: str) -> None:
         """Save an uploaded file to disk asynchronously."""
         import aiofiles
 
