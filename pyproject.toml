@@ -3,8 +3,8 @@ name = "utils"
 version = "0.0.1"
 description = "Python utils for everything"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = ["gitpython"]
+requires-python = ">=3.12"
+dependencies = ["gitpython", "opencv-python", "matplotlib", "pyyaml", "psutil"]
 
 # [project.urls]
 # "Homepage" = "https://example.com"
