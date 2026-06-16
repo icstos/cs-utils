@@ -4,7 +4,15 @@ version = "0.0.1"
 description = "Python utils for everything"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["gitpython", "opencv-python", "matplotlib", "pyyaml", "psutil"]
+dependencies = [
+    "gitpython",
+    "opencv-python",
+    "matplotlib",
+    "pyyaml",
+    "psutil",
+    "shapely",
+    "sqlmodel",
+]
 
 # [project.urls]
 # "Homepage" = "https://example.com"

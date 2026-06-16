@@ -8,8 +8,6 @@ Optimised for Python ≥3.14 — uses PEP 695 ``type`` aliases, precompiled
 ``struct.Struct``, ``memoryview``, and ``contextlib.suppress``.
 """
 
-from __future__ import annotations
-
 import base64
 import io
 import re

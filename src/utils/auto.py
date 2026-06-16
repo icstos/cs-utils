@@ -7,8 +7,6 @@ Features:
 - Msg: message dialogs (tkinter, pyautogui-like)
 """
 
-from __future__ import annotations
-
 import sys
 import threading
 import time
@@ -86,7 +84,7 @@ def _resolve_key(key: KeyName) -> ResolvedKey:
     """Resolve key names: supports 'enter', Key.enter, 'win', etc."""
     match key:
         case str():
-            low = key.lower().lstrip("<").rstrip(">")
+            low = key.lower().removeprefix("<").removesuffix(">")
             return _KEY_ALIASES.get(low) or _SPECIAL_KEYS.get(low) or key
         case _:
             return key
@@ -107,12 +105,7 @@ def _resolve_button(button: str) -> MouseButton:
 
 
 def _ease_move(
-    ctrl: mouse.Controller,
-    x: int,
-    y: int,
-    duration: float,
-    *,
-    relative: bool = False,
+    ctrl: mouse.Controller, x: int, y: int, duration: float, *, relative: bool = False
 ) -> None:
     """Move with ease-out easing; if duration <= 0, move instantly."""
     if duration <= 0:
@@ -278,12 +271,7 @@ def _run_tk_confirm(title: str, text: str, buttons: list[str]) -> str | None:
 
 
 def _run_tk_entry(
-    title: str,
-    text: str,
-    default: str = "",
-    *,
-    password: bool = False,
-    mask: str = "*",
+    title: str, text: str, default: str = "", *, password: bool = False, mask: str = "*"
 ) -> str | None:
     try:
         import tkinter as tk
@@ -588,9 +576,7 @@ class Auto:
 
         @staticmethod
         def confirm(
-            title: str = "确认",
-            text: str = "",
-            buttons: list[str] | None = None,
+            title: str = "确认", text: str = "", buttons: list[str] | None = None
         ) -> str | None:
             return _run_tk_confirm(title, text, buttons or ["ok", "cancel"])
 
@@ -602,12 +588,109 @@ class Auto:
 
         @staticmethod
         def password(
-            title: str = "密码",
-            text: str = "",
-            default: str = "",
-            mask: str = "*",
+            title: str = "密码", text: str = "", default: str = "", mask: str = "*"
         ) -> str | None:
             return _run_tk_entry(title, text, default, password=True, mask=mask)
+
+    class Screen:
+        """Screen utilities: screenshot and template matching for locating image center.
+
+        Methods:
+        - `screenshot(region=None)`: return a PIL Image of the screen or region.
+        - `locate_center(template, region=None, threshold=0.8)`: locate the
+          template on screen and return center (x, y) or None if not found.
+        """
+
+        @staticmethod
+        def screenshot(region: Region | None = None):
+            """Capture the screen or a region and return a PIL Image.
+
+            `region` is (x, y, width, height) or None for full screen.
+            """
+            try:
+                from PIL import ImageGrab
+            except Exception as e:
+                raise RuntimeError(
+                    "Pillow is required for screenshots: install pillow"
+                ) from e
+
+            if region is None:
+                img = ImageGrab.grab()
+            else:
+                x, y, w, h = region
+                bbox = (int(x), int(y), int(x + w), int(y + h))
+                img = ImageGrab.grab(bbox=bbox)
+            return img
+
+        @staticmethod
+        def locate_center(
+            template, region: Region | None = None, threshold: float = 0.8
+        ) -> Point | None:
+            """Locate the center of `template` on the screen (or region).
+
+            `template` may be a PIL Image, a numpy array (H,W[,C]), or a path-like string.
+            Returns (x, y) in screen coordinates or None if not found.
+            """
+            # take screenshot of region
+            screen_img = Auto.Screen.screenshot(region)
+
+            # lazy imports for image processing
+            try:
+                import cv2
+                import numpy as np
+                from PIL import Image
+            except Exception as e:
+                raise RuntimeError(
+                    "locate_center requires opencv-python and pillow installed"
+                ) from e
+
+            # normalize template to numpy BGR
+            if isinstance(template, str):
+                tpl = Image.open(template)
+            elif hasattr(template, "convert"):
+                tpl = template  # PIL Image-like
+            else:
+                # assume numpy array
+                tpl = None
+
+            def pil_to_bgr(img_pil: Image.Image) -> np.ndarray:
+                arr = np.asarray(img_pil)
+                if arr.ndim == 2:
+                    return arr
+                # PIL gives RGB, convert to BGR for OpenCV
+                return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+
+            if tpl is None:
+                tpl_arr = np.asarray(template)
+                if tpl_arr.ndim == 3 and tpl_arr.shape[2] == 3:
+                    tpl_bgr = cv2.cvtColor(tpl_arr, cv2.COLOR_RGB2BGR)
+                else:
+                    tpl_bgr = tpl_arr
+            else:
+                tpl_bgr = pil_to_bgr(tpl.convert("RGB") if tpl.mode != "RGB" else tpl)
+
+            scr_bgr = pil_to_bgr(
+                screen_img.convert("RGB") if screen_img.mode != "RGB" else screen_img
+            )
+
+            # template matching
+            res = cv2.matchTemplate(scr_bgr, tpl_bgr, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            if max_val < threshold:
+                return None
+
+            top_left = max_loc
+            th, tw = tpl_bgr.shape[:2]
+            cx = int(top_left[0] + tw / 2)
+            cy = int(top_left[1] + th / 2)
+
+            # if region was provided, offset coordinates
+            if region is not None:
+                rx, ry, _, _ = region
+                cx += int(rx)
+                cy += int(ry)
+
+            return cx, cy
 
     @staticmethod
     def hotkey(*keys: KeyName, interval: float = 0.1) -> None:
@@ -629,10 +712,4 @@ class Auto:
         _run_tk_alert(title, msg)
 
 
-__all__ = [
-    "Auto",
-    "KeyboardEvent",
-    "MouseEvent",
-    "get_pause",
-    "set_pause",
-]
+__all__ = ["Auto", "KeyboardEvent", "MouseEvent", "get_pause", "set_pause"]

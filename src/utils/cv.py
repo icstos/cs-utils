@@ -53,7 +53,7 @@ class Category:
 class _GeometryBounds:
     """Mixin providing geometry bounds computation from ``points``."""
 
-    points: Sequence[Point]
+    points: Sequence["Point"]
 
     @property
     def x_min(self) -> float:
@@ -226,9 +226,7 @@ class Point(_GeometryBounds):
             self.y_min * scale + top,
             value,
             ft.TextStyle(
-                weight=ft.FontWeight.BOLD,
-                size=14,
-                color=Color[self.category_idx].hex,
+                weight=ft.FontWeight.BOLD, size=14, color=Color[self.category_idx].hex
             ),
             text_align=ft.TextAlign.LEFT,
             data=data,
@@ -553,9 +551,7 @@ class Box(_GeometryBounds):
             self.y_min * scale + top,
             value,
             ft.TextStyle(
-                weight=ft.FontWeight.BOLD,
-                size=14,
-                color=Color[self.category_idx].hex,
+                weight=ft.FontWeight.BOLD, size=14, color=Color[self.category_idx].hex
             ),
             text_align=ft.TextAlign.LEFT,
             data=data,
@@ -685,9 +681,7 @@ class Polygon(_GeometryBounds):
             self.y_min * scale + top,
             value,
             ft.TextStyle(
-                weight=ft.FontWeight.BOLD,
-                size=14,
-                color=Color[self.category_idx].hex,
+                weight=ft.FontWeight.BOLD, size=14, color=Color[self.category_idx].hex
             ),
             text_align=ft.TextAlign.LEFT,
             data=data,
@@ -703,8 +697,7 @@ class Polygon(_GeometryBounds):
         if self.points:
             path.elements.append(
                 canvas.Path.MoveTo(
-                    self.points[0].x * scale + left,
-                    self.points[0].y * scale + top,
+                    self.points[0].x * scale + left, self.points[0].y * scale + top
                 )
             )
             for p in self.points[1:]:
@@ -724,8 +717,7 @@ class Polygon(_GeometryBounds):
         if self.points:
             path.elements.append(
                 canvas.Path.MoveTo(
-                    self.points[0].x * scale + left,
-                    self.points[0].y * scale + top,
+                    self.points[0].x * scale + left, self.points[0].y * scale + top
                 )
             )
             for p in self.points[1:]:
