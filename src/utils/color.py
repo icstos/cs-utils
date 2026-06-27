@@ -27,28 +27,39 @@ class ColorMeta(EnumMeta):
 
 
 class Color(Enum, metaclass=ColorMeta):
-    RED = ColorItem(name="red", name_zh="红色", hex="#f44336", rgb=(244, 67, 54))
-    PINK = ColorItem(name="pink", name_zh="粉色", hex="#e91e63", rgb=(233, 30, 99))
+    # 颜色参考：https://yansebiao.cn/
+    # YouTube红
+    RED = ColorItem(name="red", name_zh="红色", hex="#FF0000", rgb=(255, 0, 0))
+    # Amazon橙
+    ORANGE = ColorItem(name="orange", name_zh="橙色", hex="#FF9900", rgb=(255, 153, 0))
+    # Snapchat黄
+    YELLOW = ColorItem(name="yellow", name_zh="黄色", hex="#FFFC00", rgb=(255, 252, 0))
+    # WhatsApp绿
+    GREEN = ColorItem(name="green", name_zh="绿色", hex="#25D366", rgb=(37, 211, 102))
+    # 青
+    CYAN = ColorItem(name="cyan", name_zh="青色", hex="#00bcd4", rgb=(0, 188, 212))
+    # Dropbox蓝
+    BLUE = ColorItem(name="blue", name_zh="蓝色", hex="#0061FF", rgb=(0, 97, 255))
+    # 紫
     PURPLE = ColorItem(name="purple", name_zh="紫色", hex="#9c27b0", rgb=(156, 39, 176))
+
+    # RED = ColorItem(name="red", name_zh="红色", hex="#f44336", rgb=(244, 67, 54))
+    PINK = ColorItem(name="pink", name_zh="粉色", hex="#e91e63", rgb=(233, 30, 99))
     # NOTE: dont need use _ in name
     DEEPPURPLE = ColorItem(
         name="deeppurple", name_zh="深紫色", hex="#673ab7", rgb=(103, 58, 183)
     )
     INDIGO = ColorItem(name="indigo", name_zh="靛蓝", hex="#3f51b5", rgb=(63, 81, 181))
-    BLUE = ColorItem(name="blue", name_zh="蓝色", hex="#2196f3", rgb=(33, 150, 243))
     LIGHTBLUE = ColorItem(
         name="lightblue", name_zh="浅蓝色", hex="#03a9f4", rgb=(3, 169, 244)
     )
-    CYAN = ColorItem(name="cyan", name_zh="青色", hex="#00bcd4", rgb=(0, 188, 212))
     TEAL = ColorItem(name="teal", name_zh="蓝绿色", hex="#009688", rgb=(0, 150, 136))
-    GREEN = ColorItem(name="green", name_zh="绿色", hex="#4caf50", rgb=(76, 175, 80))
     LIGHTGREEN = ColorItem(
         name="lightgreen", name_zh="浅绿色", hex="#8bc34a", rgb=(139, 195, 74)
     )
     LIME = ColorItem(name="lime", name_zh="黄绿色", hex="#cddc39", rgb=(205, 220, 57))
-    YELLOW = ColorItem(name="yellow", name_zh="黄色", hex="#ffeb3b", rgb=(255, 235, 59))
     AMBER = ColorItem(name="amber", name_zh="琥珀色", hex="#ffc107", rgb=(255, 193, 7))
-    ORANGE = ColorItem(name="orange", name_zh="橙色", hex="#ff9800", rgb=(255, 152, 0))
+    # ORANGE = ColorItem(name="orange", name_zh="橙色", hex="#ff9800", rgb=(255, 152, 0))
     DEEPORANGE = ColorItem(
         name="deeporange", name_zh="深橙色", hex="#ff5722", rgb=(255, 87, 34)
     )
