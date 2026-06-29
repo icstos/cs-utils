@@ -1,4 +1,4 @@
-from utils.ai_chat import AiChat
+from cs.ai_chat import AiChat
 
 
 def main() -> None:

@@ -1,4 +1,4 @@
-from utils.auto import Auto, KeyboardEvent
+from cs.auto import Auto, KeyboardEvent
 import time
 import asyncio
 

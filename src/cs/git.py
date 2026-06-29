@@ -12,7 +12,7 @@ class GitRepo:
         self,
         local_path: Union[str, Path],
         repo_url: Optional[str] = None,
-        branch: str = 'master',
+        branch: str = "master",
     ):
         self.local_path = Path(local_path)
         self.repo_url = repo_url
@@ -21,27 +21,27 @@ class GitRepo:
     def _ensure_repo(self, repo_url: Optional[str], branch: str) -> None:
         """Ensure the local folder contains a valid Git repository."""
         self.local_path.mkdir(parents=True, exist_ok=True)
-        git_dir = self.local_path / '.git'
+        git_dir = self.local_path / ".git"
 
         if git_dir.exists():
             try:
                 self.repo = Repo(self.local_path)
             except Exception as e:
                 raise ValueError(
-                    f'{self.local_path} exists but is not a git repository.'
+                    f"{self.local_path} exists but is not a git repository."
                 ) from e
             return
 
         if not repo_url:
-            raise ValueError('repo_url is required when cloning a new repository.')
+            raise ValueError("repo_url is required when cloning a new repository.")
 
         self.repo = Repo.clone_from(repo_url, to_path=self.local_path, branch=branch)
 
-    def pull(self, remote: str = 'origin', branch: str = 'main') -> str:
+    def pull(self, remote: str = "origin", branch: str = "main") -> str:
         """Pull the latest code from the specified remote branch."""
-        return self.repo.git.pull('--progress', remote, branch)
+        return self.repo.git.pull("--progress", remote, branch)
 
-    def push(self, remote: str = 'origin', branch: str = 'main') -> None:
+    def push(self, remote: str = "origin", branch: str = "main") -> None:
         """Push the current branch to the specified remote."""
         self.repo.remote(remote).push(branch)
 
@@ -52,7 +52,7 @@ class GitRepo:
 
     def reset(self) -> None:
         """Discard all uncommitted local changes."""
-        self.repo.git.reset('--hard', 'HEAD')
+        self.repo.git.reset("--hard", "HEAD")
 
     def delete_branch(self, branch_name: str, force: bool = False) -> None:
         """Delete a local branch."""
@@ -88,7 +88,7 @@ class GitRepo:
         return [
             ref.remote_head
             for ref in self.repo.remote().refs
-            if ref.remote_head != 'HEAD'
+            if ref.remote_head != "HEAD"
         ]
 
     @property
@@ -97,7 +97,7 @@ class GitRepo:
         commit_log = self.repo.git.log(
             '--pretty={"commit":"%h","author":"%an","summary":"%s","date":"%cd"}',
             max_count=50,
-            date='format:%Y-%m-%d %H:%M',
+            date="format:%Y-%m-%d %H:%M",
         )
         return [json.loads(line) for line in commit_log.splitlines() if line]
 
@@ -114,7 +114,7 @@ class GitRepo:
         """Checkout a branch and reset it to a specific commit."""
         self.change_to_branch(branch)
         # --soft 只重置 HEAD，不修改工作区和暂存区，保留未提交的更改
-        return self.repo.git.reset('--soft', commit)
+        return self.repo.git.reset("--soft", commit)
 
     def change_to_tag(self, tag: str) -> str:
         """Checkout a tag."""

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from utils.json import Json
+from cs.json import Json
 
 
 def test_dumps_datetime_and_date_and_bytes():

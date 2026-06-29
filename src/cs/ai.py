@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from utils.my_types import AIMode
+from cs.my_types import AIMode
 
 
 @dataclass

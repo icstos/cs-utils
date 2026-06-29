@@ -18,8 +18,8 @@ import sys
 
 sys.modules.setdefault("git", fake_git)
 
-import utils.git as gitmod
-from utils.git import GitRepo
+import cs.git as gitmod
+from cs.git import GitRepo
 
 
 class FakeGit:
@@ -203,3 +203,11 @@ def test_branches_commits_tags_and_checkouts(monkeypatch, tmp_path: Path):
 
     t = repo.change_to_tag("v1.0")
     assert "checked out" in t
+
+
+def test_context_manager_support(monkeypatch, tmp_path: Path):
+    setup_fake_repo(monkeypatch, tmp_path)
+
+    with GitRepo(local_path=tmp_path, repo_url="url") as repo:
+        assert isinstance(repo, GitRepo)
+        assert repo.active_branch == "main"
