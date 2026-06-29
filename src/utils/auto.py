@@ -7,6 +7,8 @@ Features:
 - Msg: message dialogs (tkinter, pyautogui-like)
 """
 
+from __future__ import annotations
+
 import sys
 import threading
 import time
