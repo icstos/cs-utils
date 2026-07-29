@@ -1,7 +1,8 @@
-__name__ = 'cs-utils'
-__version__ = '0.0.1'
-__author__ = 'Shawn Chen'
-__email__ = 'cs@cstos.com'
+__name__ = "cs-utils"
+__description__ = "A simple utility library for Python"
+__version__ = "0.0.1"
+__author__ = "Shawn Chen"
+__email__ = "cs@cstos.com"
 
 
 # def main() -> None:

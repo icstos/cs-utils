@@ -1,8 +1,32 @@
+import os
 import json
 from pathlib import Path
 from typing import Iterable, Optional, Union
 
 from git import Repo
+
+
+class Git:
+    @staticmethod
+    def set_remote(git_repo_path: Path, repo_name: str | None):
+        if git_repo_path.exists():
+            if repo_name is None:
+                repo_name = git_repo_path.name
+            os.chdir(str(git_repo_path.absolute()))
+            for command in Git.get_set_remote_command(git_repo_path, repo_name):
+                os.system(command=command)
+            return True
+
+    @staticmethod
+    def get_set_remote_command(git_repo_path: Path, repo_name: str | None):
+        commands = []
+        commands.append(f"git remote add cshub   git@192.168.1.100:cs/{repo_name}.git")
+        commands.append(f"git remote add gitee   git@gitee.com:icstos/{repo_name}.git")
+        commands.append(
+            f"git remote add gitcode git@gitcode.com:icstos/{repo_name}.git"
+        )
+        commands.append(f"git remote add github  git@github.com:icstos/{repo_name}.git")
+        return commands
 
 
 class GitRepo:
