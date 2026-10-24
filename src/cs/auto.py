@@ -573,6 +573,7 @@ class Auto:
 
         @staticmethod
         def alert(title: str = "提示", text: str = "", button: str = "ok") -> str:
+            """常规消息框"""
             _run_tk_alert(title, text)
             return button
 
@@ -580,18 +581,21 @@ class Auto:
         def confirm(
             title: str = "确认", text: str = "", buttons: list[str] | None = None
         ) -> str | None:
+            """确认对话框，返回用户点击的按钮文本；默认按钮为 ["ok", "cancel"]"""
             return _run_tk_confirm(title, text, buttons or ["ok", "cancel"])
 
         @staticmethod
         def prompt(
             title: str = "输入", text: str = "", default: str = ""
         ) -> str | None:
+            """文本输入框，返回用户输入的内容；默认无输入返回 None"""
             return _run_tk_entry(title, text, default)
 
         @staticmethod
         def password(
             title: str = "密码", text: str = "", default: str = "", mask: str = "*"
         ) -> str | None:
+            """密码输入框，返回用户输入的密码；默认无输入返回 None"""
             return _run_tk_entry(title, text, default, password=True, mask=mask)
 
     class Screen:
