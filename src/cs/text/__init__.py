@@ -1,0 +1,278 @@
+"""文本处理：比较、变换、校验、编解码、摘要与对称加解密。
+
+三种调用方式：
+
+- 门面（推荐，全静态方法）::
+
+    from cs.text import Text
+    Text.ratio("hello world", "hello  world")
+    Text.diff("kitten", "sitting").unified()
+    Text.validate("cs@cstos.com", "email")
+    Text.encrypt("secret", password="口令")
+
+- 子模块（按需引入，互不依赖）::
+
+    from cs.text import codec, compare, crypto, digest, transform, validators
+    compare.best_matches("pythn", ["python", "path"])
+    transform.truncate("中文标题很长", 8)
+    validators.is_email("cs@cstos.com")
+
+- MCP：``python -m cs.text serve``，工具见 :mod:`cs.text.mcp_server`。
+
+命名约定：校验子模块叫 :mod:`cs.text.validators`（``validate`` 这个名字留给函数
+:func:`cs.text.validators.validate`，避免模块与函数同名）。
+
+安全约定：校验只做形态判断（不联网、不查号段库）；MD5/SHA1 仅为兼容旧数据；
+密码请用 :func:`cs.text.digest.derive_key`（PBKDF2）；加解密的密钥/口令
+绝不写入日志，MCP 侧支持 ``password_env`` 间接引用环境变量。
+"""
+
+from __future__ import annotations
+
+from . import codec, compare, crypto, digest, transform, validators
+from .codec import compress, decode, decompress, encode, guess
+from .compare import (
+    best_matches,
+    diff,
+    distance,
+    quick_ratio,
+    ratio,
+    similar,
+    tokenize,
+    unified,
+)
+from .core import Text
+from .crypto import (
+    decrypt,
+    decrypt_bytes,
+    decrypt_file,
+    encrypt,
+    encrypt_bytes,
+    encrypt_file,
+    key_from,
+    new_key,
+    token_info,
+)
+from .digest import (
+    DEFAULT_ITERATIONS,
+    derive_bytes,
+    derive_key,
+    file_hash,
+    fingerprint,
+    hash_bytes,
+    hash_text,
+    hmac_bytes,
+    hmac_text,
+    token,
+    verify,
+)
+from .errors import (
+    CodecError,
+    CryptoError,
+    DecryptError,
+    DigestError,
+    SecretError,
+    TextError,
+    TransformError,
+    ValidationError,
+)
+from .models import (
+    Check,
+    CheckResult,
+    Chunk,
+    DerivedKey,
+    DiffResult,
+    Encoding,
+    Granularity,
+    HashAlgorithm,
+    JsonModel,
+    Match,
+    OpTag,
+)
+from .transform import (
+    camel,
+    char_width,
+    collapse_whitespace,
+    constant,
+    indent,
+    kebab,
+    mask,
+    normalize,
+    one_line,
+    pad,
+    pascal,
+    slugify,
+    snake,
+    split_words,
+    strip_control,
+    strip_lines,
+    title_case,
+    to_halfwidth,
+    to_str,
+    truncate,
+    width,
+    wrap,
+)
+from .validators import (
+    CHECKS,
+    Validate,
+    has_chinese,
+    is_alnum,
+    is_ascii,
+    is_base64,
+    is_boolean,
+    is_chinese,
+    is_cidr,
+    is_credit_card,
+    is_date,
+    is_datetime,
+    is_domain,
+    is_email,
+    is_float,
+    is_hex,
+    is_id_card,
+    is_in,
+    is_integer,
+    is_ip,
+    is_ipv4,
+    is_ipv6,
+    is_json,
+    is_mac,
+    is_not_none,
+    is_number,
+    is_password,
+    is_phone,
+    is_regexp,
+    is_scientific,
+    is_semver,
+    is_slug,
+    is_string,
+    is_time,
+    is_url,
+    is_uuid,
+    length,
+    non_empty,
+    parse_checks,
+    validate,
+)
+
+#: 子模块（``from cs.text import validators`` 等价于导入校验模块）
+submodules = (codec, compare, crypto, digest, transform, validators)
+
+__all__ = [
+    "CHECKS",
+    "DEFAULT_ITERATIONS",
+    "Check",
+    "CheckResult",
+    "Chunk",
+    "CodecError",
+    "CryptoError",
+    "DecryptError",
+    "DerivedKey",
+    "DiffResult",
+    "DigestError",
+    "Encoding",
+    "Granularity",
+    "HashAlgorithm",
+    "JsonModel",
+    "Match",
+    "OpTag",
+    "SecretError",
+    "Text",
+    "TextError",
+    "TransformError",
+    "Validate",
+    "ValidationError",
+    "best_matches",
+    "camel",
+    "char_width",
+    "collapse_whitespace",
+    "compress",
+    "constant",
+    "decode",
+    "decompress",
+    "decrypt",
+    "decrypt_bytes",
+    "decrypt_file",
+    "derive_bytes",
+    "derive_key",
+    "diff",
+    "distance",
+    "encode",
+    "encrypt",
+    "encrypt_bytes",
+    "encrypt_file",
+    "file_hash",
+    "fingerprint",
+    "guess",
+    "has_chinese",
+    "hash_bytes",
+    "hash_text",
+    "hmac_bytes",
+    "hmac_text",
+    "indent",
+    "is_alnum",
+    "is_ascii",
+    "is_base64",
+    "is_boolean",
+    "is_chinese",
+    "is_cidr",
+    "is_credit_card",
+    "is_date",
+    "is_datetime",
+    "is_domain",
+    "is_email",
+    "is_float",
+    "is_hex",
+    "is_id_card",
+    "is_in",
+    "is_integer",
+    "is_ip",
+    "is_ipv4",
+    "is_ipv6",
+    "is_json",
+    "is_mac",
+    "is_not_none",
+    "is_number",
+    "is_password",
+    "is_phone",
+    "is_regexp",
+    "is_scientific",
+    "is_semver",
+    "is_slug",
+    "is_string",
+    "is_time",
+    "is_url",
+    "is_uuid",
+    "kebab",
+    "key_from",
+    "length",
+    "mask",
+    "new_key",
+    "non_empty",
+    "normalize",
+    "one_line",
+    "pad",
+    "parse_checks",
+    "pascal",
+    "quick_ratio",
+    "ratio",
+    "similar",
+    "slugify",
+    "snake",
+    "split_words",
+    "strip_control",
+    "strip_lines",
+    "title_case",
+    "to_halfwidth",
+    "to_str",
+    "token",
+    "token_info",
+    "tokenize",
+    "truncate",
+    "unified",
+    "validate",
+    "verify",
+    "width",
+    "wrap",
+]
