@@ -1,10 +1,11 @@
 """计算机视觉标注数据结构。
 
-提供 Point、Box、Polygon、Category、AnnoImg、AnnoDataset 等类型。
+提供 Point、Box、Polygon、Line、Circle、Category、AnnoImg、AnnoDataset 等类型。
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from functools import cached_property
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 POINT_RADIUS = 4
+# 圆周采样点数量：需为 4 的倍数，以保证取到上下左右四个极点，
+# 这样由采样点得到的外接框与圆的真实外接框完全一致。
+CIRCLE_SAMPLE_NUM = 64
 
 
 # ============================================================
@@ -209,7 +213,7 @@ class Point(_GeometryBounds):
     def distance(self, point: Point) -> float:
         return shapely.distance(self.obj, point.obj)
 
-    def is_in_obj(self, obj: Point | Box | Polygon) -> bool:
+    def is_in_obj(self, obj: Point | Box | Polygon | Line | Circle) -> bool:
         """判断该点是否落在 ``obj`` 的外接框内。"""
         return obj.x_min <= self.x <= obj.x_max and obj.y_min <= self.y <= obj.y_max
 
@@ -527,7 +531,7 @@ class Box(_GeometryBounds):
 
     # --- 静态工具方法 ---
     @staticmethod
-    def bounding_box(objs: list[Point | Box | Polygon]) -> list[int]:
+    def bounding_box(objs: list[Point | Box | Polygon | Line | Circle]) -> list[int]:
         return [
             int(f([getattr(o, attr) for o in objs]))
             for f, attr in [
@@ -729,6 +733,458 @@ class Polygon(_GeometryBounds):
 
 
 # ============================================================
+# 线段
+# ============================================================
+
+
+@dataclass
+class Line(_GeometryBounds):
+    """由起点与终点确定的线段（自动规范为从左上指向右下）。
+
+    坐标使用图像坐标系（y 轴向下），因此 ``angle`` 的顺时针方向为正。
+    """
+
+    start: Point = field(default_factory=Point)
+    end: Point = field(default_factory=Point)
+    category_idx: int = 0
+    conf: float = -1.0
+    create_time: datetime = field(default_factory=datetime.now)
+
+    def __post_init__(self) -> None:
+        self.sort_point()
+
+    # --- 顶点列表 ---
+    @property
+    def points(self) -> list[Point]:
+        return [self.start, self.end]
+
+    # --- 几何量 ---
+    @property
+    def delta_x(self) -> float:
+        return self.end.x - self.start.x
+
+    @property
+    def delta_y(self) -> float:
+        return self.end.y - self.start.y
+
+    @property
+    def length(self) -> float:
+        """线段长度。"""
+        return math.hypot(self.delta_x, self.delta_y)
+
+    @property
+    def angle(self) -> float:
+        """与 x 轴正方向的夹角（角度制）。
+
+        端点已规整为从左上指向右下，故取值落在 [-90, 90]；
+        y 轴向下，正角度表示向右下方倾斜。
+        """
+        return math.degrees(math.atan2(self.delta_y, self.delta_x))
+
+    @property
+    def slope(self) -> float:
+        """斜率 dy/dx；竖直线返回 inf，水平线返回 0。"""
+        return self.delta_y / self.delta_x if self.delta_x else float("inf")
+
+    @property
+    def center(self) -> Point:
+        """线段中点。"""
+        return Point(
+            x=(self.start.x + self.end.x) / 2, y=(self.start.y + self.end.y) / 2
+        )
+
+    @property
+    def x_center(self) -> float:
+        return self.center.x
+
+    @property
+    def y_center(self) -> float:
+        return self.center.y
+
+    @property
+    def area(self) -> float:
+        """线段没有面积，恒为 0（与 Box/Polygon 保持同一接口）。"""
+        return 0.0
+
+    @property
+    def is_horizontal(self) -> bool:
+        return math.isclose(self.delta_y, 0.0, abs_tol=1e-9)
+
+    @property
+    def is_vertical(self) -> bool:
+        return math.isclose(self.delta_x, 0.0, abs_tol=1e-9)
+
+    # --- Shapely 对象 ---
+    @cached_property
+    def obj(self) -> shapely.LineString:
+        return shapely.LineString(
+            [(self.start.x, self.start.y), (self.end.x, self.end.y)]
+        )
+
+    # --- 打印表示 ---
+    def __repr__(self) -> str:
+        return f"Line({self.start!r} -> {self.end!r}, conf={self.conf:.2f}, category_idx={self.category_idx})"
+
+    # --- 内部排序 ---
+    def sort_point(self) -> None:
+        """规范端点顺序：保证 start 位于 end 的左上方。"""
+        if (self.start.x, self.start.y) > (self.end.x, self.end.y):
+            self.start, self.end = self.end, self.start
+
+    # --- 操作（返回 self 以支持链式调用） ---
+    def offset(self, delta_x: float = 0.0, delta_y: float = 0.0) -> Line:
+        """原地平移线段并返回 self。"""
+        self.start.x += delta_x
+        self.start.y += delta_y
+        self.end.x += delta_x
+        self.end.y += delta_y
+        self.__dict__.pop("obj", None)
+        return self
+
+    def scale(self, scale_x: float = 1.0, scale_y: float = 1.0) -> Line:
+        """原地缩放线段（相对坐标原点）并返回 self。"""
+        self.start.x *= scale_x
+        self.start.y *= scale_y
+        self.end.x *= scale_x
+        self.end.y *= scale_y
+        self.__dict__.pop("obj", None)
+        return self
+
+    # --- 距离 ---
+    def distance(self, obj: Point | Box | Polygon | Line | Circle) -> float:
+        """到另一个几何对象的最短距离（相交时为 0）。"""
+        return shapely.distance(self.obj, obj.obj)
+
+    def is_in_obj(self, obj: Point | Box | Polygon | Line | Circle) -> bool:
+        """判断整条线段是否落在 ``obj`` 的外接框内。"""
+        return (
+            obj.x_min <= self.x_min
+            and self.x_max <= obj.x_max
+            and obj.y_min <= self.y_min
+            and self.y_max <= obj.y_max
+        )
+
+    # --- 格式转换 ---
+    def load_yolo_txt_line(
+        self, img_width: int, img_height: int, line_str: str
+    ) -> None:
+        """解析 ``类别 x1 y1 x2 y2 [conf]`` 格式的归一化文本行。"""
+        parts = [float(v) for v in line_str.split()]
+        self.category_idx = int(parts[0])
+        self.start = Point(x=parts[1] * img_width, y=parts[2] * img_height)
+        self.end = Point(x=parts[3] * img_width, y=parts[4] * img_height)
+        if len(parts) > 5:
+            self.conf = parts[5]
+        self.sort_point()
+
+    def to_str(self, img_size: ImgSize, with_conf: bool = False) -> str:
+        line = (
+            f"{self.category_idx} "
+            f"{self.start.x / img_size.width} "
+            f"{self.start.y / img_size.height} "
+            f"{self.end.x / img_size.width} "
+            f"{self.end.y / img_size.height}"
+        )
+        return f"{line} {self.conf}\n" if with_conf else f"{line}\n"
+
+    def to_json(self) -> dict:
+        return {
+            "x1": int(self.start.x),
+            "y1": int(self.start.y),
+            "x2": int(self.end.x),
+            "y2": int(self.end.y),
+            "category_idx": self.category_idx,
+            "conf": f"{self.conf:.3f}",
+        }
+
+    def to_sql_model(self, img, session):
+        """转为分割表实体：线段以 2 个点存储。
+
+        注意：``TSegmentAnno.anno`` 会按多边形还原，线段因此被还原为退化多边形。
+        """
+        import pickle
+
+        from .entity_model import TCategory, TSegmentAnno, select
+
+        t_category = session.exec(
+            select(TCategory).where(TCategory.idx == self.category_idx)
+        ).one()
+        return TSegmentAnno(
+            points=pickle.dumps(self.points),
+            conf=self.conf,
+            img=img,
+            category=t_category,
+        )
+
+    # --- Flet Canvas 绘制（线段无填充，仅提供文字与描边） ---
+    def canvas_text(
+        self, scale=1.0, left=0, top=0, category: Category | None = None, data=None
+    ):
+        import flet as ft
+        from flet import canvas
+
+        value = category[self.category_idx] if category else "category"
+        return canvas.Text(
+            self.x_min * scale + left,
+            self.y_min * scale + top,
+            value,
+            ft.TextStyle(
+                weight=ft.FontWeight.BOLD, size=14, color=Color[self.category_idx].hex
+            ),
+            text_align=ft.TextAlign.LEFT,
+            data=data,
+        )
+
+    def canvas_stroke(self, scale=1.0, left=0, top=0, data=None, stroke_width=1):
+        from flet import canvas
+
+        from .flet import stroke_paint
+
+        return canvas.Line(
+            self.start.x * scale + left,
+            self.start.y * scale + top,
+            self.end.x * scale + left,
+            self.end.y * scale + top,
+            paint=stroke_paint(color_idx=self.category_idx, stroke_width=stroke_width),
+            data=data,
+        )
+
+
+# ============================================================
+# 圆
+# ============================================================
+
+
+@dataclass
+class Circle(_GeometryBounds):
+    """由圆心与半径确定的圆。
+
+    ``center`` 自身的 ``category_idx`` / ``conf`` 不参与圆的语义，
+    类别与置信度以 ``Circle`` 上的字段为准。
+    """
+
+    center: Point = field(default_factory=Point)
+    radius: float = 0.0
+    category_idx: int = 0
+    conf: float = -1.0
+    create_time: datetime = field(default_factory=datetime.now)
+
+    # --- 缓存失效（圆心或半径变化后需重算） ---
+    def _invalidate_cache(self) -> None:
+        for key in ("points", "obj"):
+            self.__dict__.pop(key, None)
+
+    # --- 为提升性能而重写 Mixin 的边界计算 ---
+    @property
+    @override
+    def x_min(self) -> float:
+        return self.center.x - self.radius
+
+    @property
+    @override
+    def y_min(self) -> float:
+        return self.center.y - self.radius
+
+    @property
+    @override
+    def x_max(self) -> float:
+        return self.center.x + self.radius
+
+    @property
+    @override
+    def y_max(self) -> float:
+        return self.center.y + self.radius
+
+    @property
+    @override
+    def width(self) -> float:
+        return 2 * self.radius
+
+    @property
+    @override
+    def height(self) -> float:
+        return 2 * self.radius
+
+    @property
+    def x_center(self) -> float:
+        return self.center.x
+
+    @property
+    def y_center(self) -> float:
+        return self.center.y
+
+    # --- 几何量 ---
+    @property
+    def diameter(self) -> float:
+        return self.radius * 2
+
+    @property
+    def area(self) -> float:
+        """圆面积 πr²。"""
+        return math.pi * self.radius**2
+
+    @property
+    def circumference(self) -> float:
+        """圆周长 2πr。"""
+        return 2 * math.pi * self.radius
+
+    # --- 圆周采样点 / Shapely 对象 ---
+    @cached_property
+    def points(self) -> list[Point]:
+        """圆周采样点（默认 64 个，自 x 轴正方向按顺时针排列）。"""
+        n = CIRCLE_SAMPLE_NUM
+        cx, cy, r = self.center.x, self.center.y, self.radius
+        return [
+            Point(
+                x=cx + r * math.cos(2 * math.pi * i / n),
+                y=cy + r * math.sin(2 * math.pi * i / n),
+            )
+            for i in range(n)
+        ]
+
+    @cached_property
+    def obj(self) -> shapely.Polygon:
+        return shapely.Point(self.center.x, self.center.y).buffer(
+            self.radius, quad_segs=CIRCLE_SAMPLE_NUM // 4
+        )
+
+    # --- 打印表示 ---
+    def __repr__(self) -> str:
+        return f"Circle(center={self.center!r}, r={self.radius}, conf={self.conf:.2f}, category_idx={self.category_idx})"
+
+    # --- 操作（返回 self 以支持链式调用） ---
+    def offset(self, delta_x: float = 0.0, delta_y: float = 0.0) -> Circle:
+        """原地平移圆并返回 self。"""
+        self.center.x += delta_x
+        self.center.y += delta_y
+        self._invalidate_cache()
+        return self
+
+    def scale(self, scale_x: float = 1.0, scale_y: float = 1.0) -> Circle:
+        """原地缩放圆并返回 self。
+
+        圆心按 (scale_x, scale_y) 缩放；半径取两者的平均值 ——
+        严格意义下非等比缩放会把圆变成椭圆，此处以均值近似（等比缩放时精确）。
+        """
+        self.center.x *= scale_x
+        self.center.y *= scale_y
+        self.radius *= (scale_x + scale_y) / 2
+        self._invalidate_cache()
+        return self
+
+    # --- 距离与包含判断 ---
+    def distance(self, obj: Point | Box | Polygon | Line | Circle) -> float:
+        """到另一个几何对象的最短距离（相交/内含时为 0）。"""
+        return shapely.distance(self.obj, obj.obj)
+
+    def distance_to_boundary(self, point: Point) -> float:
+        """点到圆周的距离（点在圆内时同样返回正值）。"""
+        return abs(self.center.distance(point) - self.radius)
+
+    def contains(self, point: Point, tolerance: float = 1e-9) -> bool:
+        """判断点是否位于圆内或圆周上。"""
+        return self.center.distance(point) <= self.radius + tolerance
+
+    # --- 格式转换 ---
+    def load_yolo_txt_line(
+        self, img_width: int, img_height: int, line_str: str
+    ) -> None:
+        """解析 ``类别 cx cy r [conf]`` 格式的归一化文本行。
+
+        半径按短边归一化，以保证非正方形图像上的圆仍是圆。
+        """
+        parts = [float(v) for v in line_str.split()]
+        self.category_idx = int(parts[0])
+        self.center = Point(x=parts[1] * img_width, y=parts[2] * img_height)
+        self.radius = parts[3] * min(img_width, img_height)
+        if len(parts) > 4:
+            self.conf = parts[4]
+        self._invalidate_cache()
+
+    def to_str(self, img_size: ImgSize, with_conf: bool = False) -> str:
+        line = (
+            f"{self.category_idx} "
+            f"{self.center.x / img_size.width} "
+            f"{self.center.y / img_size.height} "
+            f"{self.radius / min(img_size.width, img_size.height)}"
+        )
+        return f"{line} {self.conf}\n" if with_conf else f"{line}\n"
+
+    def to_json(self) -> dict:
+        return {
+            "cx": int(self.center.x),
+            "cy": int(self.center.y),
+            "r": int(self.radius),
+            "category_idx": self.category_idx,
+            "conf": f"{self.conf:.3f}",
+        }
+
+    def to_sql_model(self, img, session):
+        """转为分割表实体：圆以圆周采样点存储（等价于高精度多边形）。
+
+        由于采样点包含上下左右四个极点，圆心与半径可由其外接框精确还原。
+        """
+        import pickle
+
+        from .entity_model import TCategory, TSegmentAnno, select
+
+        t_category = session.exec(
+            select(TCategory).where(TCategory.idx == self.category_idx)
+        ).one()
+        return TSegmentAnno(
+            points=pickle.dumps(self.points),
+            conf=self.conf,
+            img=img,
+            category=t_category,
+        )
+
+    # --- Flet Canvas 绘制 ---
+    def canvas_text(
+        self, scale=1.0, left=0, top=0, category: Category | None = None, data=None
+    ):
+        import flet as ft
+        from flet import canvas
+
+        value = category[self.category_idx] if category else "category"
+        return canvas.Text(
+            self.x_min * scale + left,
+            self.y_min * scale + top,
+            value,
+            ft.TextStyle(
+                weight=ft.FontWeight.BOLD, size=14, color=Color[self.category_idx].hex
+            ),
+            text_align=ft.TextAlign.LEFT,
+            data=data,
+        )
+
+    def canvas_stroke(self, scale=1.0, left=0, top=0, data=None, stroke_width=1):
+        from flet import canvas
+
+        from .flet import stroke_paint
+
+        return canvas.Circle(
+            self.center.x * scale + left,
+            self.center.y * scale + top,
+            radius=self.radius * scale,
+            paint=stroke_paint(color_idx=self.category_idx, stroke_width=stroke_width),
+            data=data,
+        )
+
+    def canvas_fill(self, scale=1.0, left=0, top=0, data=None):
+        from flet import canvas
+
+        from .flet import fill_paint
+
+        return canvas.Circle(
+            self.center.x * scale + left,
+            self.center.y * scale + top,
+            radius=self.radius * scale,
+            paint=fill_paint(color_idx=self.category_idx),
+            data=data,
+        )
+
+
+# ============================================================
 # AnnoImg —— 单张图像的标注
 # ============================================================
 
@@ -738,7 +1194,7 @@ class AnnoImg:
     """单张图像的标注集合。"""
 
     file: Path | None = None
-    objs: list[Point | Box | Polygon] = field(default_factory=list)
+    objs: list[Point | Box | Polygon | Line | Circle] = field(default_factory=list)
     img_size: ImgSize = field(default_factory=lambda: ImgSize(-1, -1))
     task_type: TaskType = TaskType.DETECT
 
