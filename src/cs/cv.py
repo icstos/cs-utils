@@ -1,6 +1,6 @@
-"""Computer vision annotation data structures.
+"""计算机视觉标注数据结构。
 
-Provides Point, Box, Polygon, Category, AnnoImg, and AnnoDataset types.
+提供 Point、Box、Polygon、Category、AnnoImg、AnnoDataset 等类型。
 """
 
 from __future__ import annotations
@@ -25,13 +25,13 @@ POINT_RADIUS = 4
 
 
 # ============================================================
-# Category
+# 类别
 # ============================================================
 
 
 @dataclass
 class Category:
-    """Category name list, supports lookup by index or name."""
+    """类别名称列表，支持按下标或名称查找。"""
 
     names: list[str] = field(default_factory=list)
 
@@ -46,12 +46,12 @@ class Category:
 
 
 # ============================================================
-# Geometry utility Mixin
+# 几何工具 Mixin
 # ============================================================
 
 
 class _GeometryBounds:
-    """Mixin providing geometry bounds computation from ``points``."""
+    """基于 ``points`` 提供几何边界计算能力的 Mixin。"""
 
     points: Sequence["Point"]
 
@@ -88,7 +88,7 @@ class _GeometryBounds:
         )
 
     def limit_obj(self, size: ImgSize) -> None:  # pyright: ignore[reportUnannotatedBase]
-        """Clamp object within image boundaries."""
+        """将对象裁剪到图像边界之内。"""
         dx = dy = 0.0
         if self.x_min < 0:
             dx = -self.x_min
@@ -103,13 +103,13 @@ class _GeometryBounds:
 
 
 # ============================================================
-# Point
+# 点
 # ============================================================
 
 
 @dataclass
 class Point(_GeometryBounds):
-    """2D point with category index, confidence, and timestamp."""
+    """二维点，包含类别下标、置信度与时间戳。"""
 
     x: float = -1.0
     y: float = -1.0
@@ -117,7 +117,7 @@ class Point(_GeometryBounds):
     conf: float = -1.0
     create_time: datetime = field(default_factory=datetime.now)
 
-    # --- Override Mixin bounds for performance ---
+    # --- 为提升性能而重写 Mixin 的边界计算 ---
     @property
     @override
     def x_min(self) -> float:
@@ -148,7 +148,7 @@ class Point(_GeometryBounds):
     def height(self) -> float:
         return 2 * POINT_RADIUS
 
-    # --- Fast int conversion ---
+    # --- 快速转整数 ---
     @property
     def x_int(self) -> int:
         return int(self.x)
@@ -157,11 +157,11 @@ class Point(_GeometryBounds):
     def y_int(self) -> int:
         return int(self.y)
 
-    # --- Representation ---
+    # --- 打印表示 ---
     def __repr__(self) -> str:
         return f"({self.x},{self.y})"
 
-    # --- Lazy geometry objects ---
+    # --- 惰性构建的几何对象 ---
     @cached_property
     def points(self) -> list[Point]:
         r = POINT_RADIUS
@@ -182,7 +182,7 @@ class Point(_GeometryBounds):
             start=Point(self.x_min, self.y_min), end=Point(self.x_max, self.y_max)
         )
 
-    # --- Conversion ---
+    # --- 格式转换 ---
     def to_str(self, img_size: ImgSize, with_conf: bool = False) -> str:
         line = (
             f"{self.category_idx} {self.x / img_size.width} {self.y / img_size.height}"
@@ -197,23 +197,23 @@ class Point(_GeometryBounds):
         ).one()
         return TClassifyAnno(conf=self.conf, img=img, category=t_category)
 
-    # --- Operations (chainable) ---
+    # --- 操作（支持链式调用） ---
     def offset(self, delta_x: float = 0.0, delta_y: float = 0.0) -> Point:
-        """Return a new Point with the given offset."""
+        """返回按给定位移平移后的新点。"""
         return replace(self, x=self.x + delta_x, y=self.y + delta_y)
 
     def scale(self, scale_x: float = 1.0, scale_y: float = 1.0) -> Point:
-        """Return a new Point with coordinates scaled."""
+        """返回按给定比例缩放坐标后的新点。"""
         return replace(self, x=self.x * scale_x, y=self.y * scale_y)
 
     def distance(self, point: Point) -> float:
         return shapely.distance(self.obj, point.obj)
 
     def is_in_obj(self, obj: Point | Box | Polygon) -> bool:
-        """Check whether this point lies inside the bounding box of ``obj``."""
+        """判断该点是否落在 ``obj`` 的外接框内。"""
         return obj.x_min <= self.x <= obj.x_max and obj.y_min <= self.y <= obj.y_max
 
-    # --- Flet Canvas rendering ---
+    # --- Flet Canvas 绘制 ---
     def canvas_text(
         self, scale=1.0, left=0, top=0, category: Category | None = None, data=None
     ):
@@ -262,14 +262,14 @@ class Point(_GeometryBounds):
 
 
 # ============================================================
-# Box
+# 矩形框
 # ============================================================
 
 
 @dataclass
 class Box(_GeometryBounds):
-    """Axis-aligned bounding box defined by two diagonal corners
-    (auto-sorted to top-left → bottom-right).
+    """由对角两点定义的轴对齐矩形框
+    （会自动排序为左上 → 右下）。
     """
 
     start: Point = field(default_factory=Point)
@@ -281,7 +281,7 @@ class Box(_GeometryBounds):
     def __post_init__(self) -> None:
         self.sort_point()
 
-    # --- Override Mixin bounds for performance ---
+    # --- 为提升性能而重写 Mixin 的边界计算 ---
     @property
     @override
     def x_min(self) -> float:
@@ -302,7 +302,7 @@ class Box(_GeometryBounds):
     def y_max(self) -> float:
         return self.end.y
 
-    # --- Integer shortcuts ---
+    # --- 整数快捷属性 ---
     @property
     def x_min_int(self) -> int:
         return int(self.x_min)
@@ -327,7 +327,7 @@ class Box(_GeometryBounds):
     def y_center(self) -> float:
         return self.y_min + self.height / 2
 
-    # --- Area & axis ratio ---
+    # --- 面积与长宽比 ---
     @cached_property
     def area(self) -> float:
         return self.width * self.height
@@ -344,7 +344,7 @@ class Box(_GeometryBounds):
     def axis_ratio(self) -> float:
         return self.long_axis / self.short_axis if self.short_axis else float("inf")
 
-    # --- XYXY / IOU data ---
+    # --- XYXY / IOU 数据 ---
     @property
     def xyxy(self) -> list[float]:
         return [self.x_min, self.y_min, self.x_max, self.y_max]
@@ -353,7 +353,7 @@ class Box(_GeometryBounds):
     def iou_data(self) -> list[float]:
         return self.xyxy
 
-    # --- Point list / Shapely object ---
+    # --- 顶点列表 / Shapely 对象 ---
     @cached_property
     def points(self) -> list[Point]:
         return [
@@ -367,20 +367,20 @@ class Box(_GeometryBounds):
     def obj(self) -> shapely.Polygon:
         return shapely.box(self.x_min, self.y_min, self.x_max, self.y_max)
 
-    # --- Representation ---
+    # --- 打印表示 ---
     def __repr__(self) -> str:
         return f"[{self.x_min_int}, {self.y_min_int}, {self.x_max_int}, {self.y_max_int}, {self.conf:.2f}, {self.category_idx}]"
 
-    # --- Internal sorting ---
+    # --- 内部排序 ---
     def sort_point(self) -> None:
         if self.start.x > self.end.x:
             self.start.x, self.end.x = self.end.x, self.start.x
         if self.start.y > self.end.y:
             self.start.y, self.end.y = self.end.y, self.start.y
 
-    # --- Operations (returns Self for chaining) ---
+    # --- 操作（返回 self 以支持链式调用） ---
     def offset(self, delta_x: float = 0.0, delta_y: float = 0.0) -> Box:
-        """Translate the box in-place and return self."""
+        """原地平移矩形框并返回 self。"""
         self.start.x += delta_x
         self.start.y += delta_y
         self.end.x += delta_x
@@ -388,19 +388,19 @@ class Box(_GeometryBounds):
         return self
 
     def scale(self, scale_x: float = 1.0, scale_y: float = 1.0) -> Box:
-        """Scale the box in-place and return self."""
+        """原地缩放矩形框并返回 self。"""
         self.start.x *= scale_x
         self.start.y *= scale_y
         self.end.x *= scale_x
         self.end.y *= scale_y
         return self
 
-    # --- Distance & IOU ---
+    # --- 距离与 IOU ---
     def distance(self, box: Box) -> float:
         return shapely.distance(self.obj, box.obj)
 
     def iou(self, box: Box) -> float:
-        """Compute Intersection over Union."""
+        """计算交并比（IoU）。"""
         left = max(self.x_min, box.x_min)
         top = max(self.y_min, box.y_min)
         right = min(self.x_max, box.x_max)
@@ -410,7 +410,7 @@ class Box(_GeometryBounds):
         return cross / union if cross > 0 and union > 0 else 0.0
 
     def iou_max(self, box: Box) -> float:
-        """Compute intersection / max(self.area, box.area)."""
+        """计算交集 / max(self.area, box.area)。"""
         left = max(self.x_min, box.x_min)
         top = max(self.y_min, box.y_min)
         right = min(self.x_max, box.x_max)
@@ -420,7 +420,7 @@ class Box(_GeometryBounds):
             return 0.0
         return max(cross / self.area, cross / box.area)
 
-    # --- Crop region ---
+    # --- 裁剪区域 ---
     def get_box_crop_cv2(
         self, img_cv2: np.ndarray, expand_size: int = 50
     ) -> np.ndarray:
@@ -436,11 +436,11 @@ class Box(_GeometryBounds):
         )
 
     def get_region_data(self, img: np.ndarray, flag=1) -> float | None:
-        """Return a statistic from the region (currently max-grayscale only)."""
+        """返回该区域的统计值（目前仅支持最大灰度值）。"""
         roi = img[int(self.y_min) : int(self.y_max), int(self.x_min) : int(self.x_max)]
         return cv2.minMaxLoc(roi)[1] if roi.size else None
 
-    # --- Grayscale statistics (torch / np) ---
+    # --- 灰度统计（torch / np） ---
     def _roi_torch(self, img_torch):
         return img_torch[
             self.y_min_int : self.y_max_int, self.x_min_int : self.x_max_int
@@ -475,7 +475,7 @@ class Box(_GeometryBounds):
     def lt_grayscale_nums(self, value, img_cv2: np.ndarray) -> int:
         return self._count_roi_np(img_cv2, lambda r: r < value)
 
-    # --- Conversion ---
+    # --- 格式转换 ---
     def load_yolo_txt_line(
         self, img_width: int, img_height: int, line_str: str
     ) -> None:
@@ -525,7 +525,7 @@ class Box(_GeometryBounds):
             category=t_category,
         )
 
-    # --- Static utilities ---
+    # --- 静态工具方法 ---
     @staticmethod
     def bounding_box(objs: list[Point | Box | Polygon]) -> list[int]:
         return [
@@ -538,7 +538,7 @@ class Box(_GeometryBounds):
             ]
         ]
 
-    # --- Flet Canvas rendering ---
+    # --- Flet Canvas 绘制 ---
     def canvas_text(
         self, scale=1.0, left=0, top=0, category: Category | None = None, data=None
     ):
@@ -587,25 +587,25 @@ class Box(_GeometryBounds):
 
 
 # ============================================================
-# Polygon
+# 多边形
 # ============================================================
 
 
 @dataclass
 class Polygon(_GeometryBounds):
-    """Polygon annotation defined by a list of vertices."""
+    """由一组顶点定义的多边形标注。"""
 
     points: list[Point] = field(default_factory=list)
     category_idx: int = 0
     conf: float = -1.0
     create_time: datetime = field(default_factory=datetime.now)
 
-    # --- Shapely ---
+    # --- Shapely 对象 ---
     @cached_property
     def obj(self) -> shapely.Polygon:
         return shapely.Polygon([(p.x, p.y) for p in self.points])
 
-    # --- Area (shoelace formula) ---
+    # --- 面积（鞋带公式） ---
     @cached_property
     def area(self) -> float:
         n = len(self.points)
@@ -617,7 +617,7 @@ class Polygon(_GeometryBounds):
             s += pts[i].x * pts[i + 1].y - pts[i + 1].x * pts[i].y
         return abs(s) / 2.0
 
-    # --- Conversion ---
+    # --- 格式转换 ---
     def load_yolo_txt_line(
         self, img_width: int, img_height: int, line_str: str
     ) -> None:
@@ -651,7 +651,7 @@ class Polygon(_GeometryBounds):
             category=t_category,
         )
 
-    # --- Operations (returns Self) ---
+    # --- 操作（返回 self） ---
     def offset(self, delta_x: float = 0.0, delta_y: float = 0.0) -> Polygon:
         for p in self.points:
             p.x += delta_x
@@ -665,10 +665,10 @@ class Polygon(_GeometryBounds):
         return self
 
     def plot(self, img_cv2: np.ndarray) -> None:
-        """Placeholder — actual drawing is handled by ``cv_draw`` module."""
+        """占位方法 —— 实际绘制由 ``cv_draw`` 模块负责。"""
         pass
 
-    # --- Flet Canvas rendering ---
+    # --- Flet Canvas 绘制 ---
     def canvas_text(
         self, scale=1.0, left=0, top=0, category: Category | None = None, data=None
     ):
@@ -729,13 +729,13 @@ class Polygon(_GeometryBounds):
 
 
 # ============================================================
-# AnnoImg — single image annotation
+# AnnoImg —— 单张图像的标注
 # ============================================================
 
 
 @dataclass
 class AnnoImg:
-    """Annotation collection for a single image."""
+    """单张图像的标注集合。"""
 
     file: Path | None = None
     objs: list[Point | Box | Polygon] = field(default_factory=list)
@@ -743,7 +743,7 @@ class AnnoImg:
     task_type: TaskType = TaskType.DETECT
 
     def load(self, file: Path | None = None) -> None:
-        """Load objects from a YOLO-format annotation file."""
+        """从 YOLO 格式的标注文件加载标注对象。"""
         if file is not None:
             self.file = file
         if self.file is None:
@@ -765,7 +765,7 @@ class AnnoImg:
             self.objs.append(obj)
 
     def to_str(self) -> str:
-        """Export to YOLO-format annotation string."""
+        """导出为 YOLO 格式的标注字符串。"""
         lines = [
             obj.to_str(self.img_size)
             for obj in self.objs
@@ -778,11 +778,11 @@ class AnnoImg:
         file_path.write_text(self.to_str(), encoding="utf-8")
 
     def filter_(self) -> list:
-        """Filter duplicate boxes (currently placeholder: sort only)."""
+        """过滤重复框（目前为占位实现：仅做排序）。"""
         self.objs.sort(key=lambda o: (o.x_min, o.y_min))
         return self.objs
 
-    # --- Bounding box of all objects ---
+    # --- 所有对象的外接框 ---
     @property
     def x_min(self) -> float:
         return min((o.x_min for o in self.objs), default=-1)
@@ -801,13 +801,13 @@ class AnnoImg:
 
 
 # ============================================================
-# AnnoDataset — dataset-level annotation
+# AnnoDataset —— 数据集级标注
 # ============================================================
 
 
 @dataclass
 class AnnoDataset:
-    """Annotation dataset linking an image directory with a label directory."""
+    """关联图像目录与标签目录的标注数据集。"""
 
     img_dir: Path
     anno_dir: Path
