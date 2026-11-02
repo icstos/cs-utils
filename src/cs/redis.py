@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Self, override
 import redis
 
 if TYPE_CHECKING:
-    from cs.config_manager import RedisConfig
+    from cs.config.samples import Redis as RedisConfig
 
 # ============ 类型别名 (PEP 695) ============
 type RedisValue = str | bytes
@@ -56,7 +56,7 @@ def _build_pool(opts: RedisOptions) -> redis.ConnectionPool:
 class Redis:
     """Redis 客户端封装：共享连接池，线程安全，可直接调用常用命令。"""
 
-    __slots__ = ("_pool", "_client")
+    __slots__ = ("_client", "_pool")
 
     def __init__(
         self,
@@ -109,7 +109,7 @@ class Redis:
         return obj
 
     @classmethod
-    def from_config(cls, cfg: RedisConfig | RedisOptions) -> Self:
+    def from_config(cls, cfg: "RedisConfig | RedisOptions") -> Self:
         """从 RedisConfig / RedisOptions 创建客户端"""
         if isinstance(cfg, RedisOptions):
             return cls.from_options(cfg)
