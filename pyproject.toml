@@ -41,6 +41,7 @@ cs-cv = "cs.cv.__main__:main"
 cs-email = "cs.email.__main__:main"
 cs-env = "cs.env.__main__:main"
 cs-text = "cs.text.__main__:main"
+cs-net = "cs.net.__main__:main"
 
 # [project.urls]
 # "Homepage" = "https://example.com"
@@ -61,6 +62,7 @@ packages = [
     "cs.email",
     "cs.env",
     "cs.text",
+    "cs.net",
 ]
 package-dir = { "cs" = "src/cs" }
 include-package-data = true
