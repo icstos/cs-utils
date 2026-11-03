@@ -57,6 +57,7 @@ packages = [
     "cs.samba",
     "cs.config",
     "cs.cv",
+    "cs.cv.db",
     "cs.email",
     "cs.env",
     "cs.text",

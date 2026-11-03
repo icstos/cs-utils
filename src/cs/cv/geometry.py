@@ -273,7 +273,9 @@ class Point(Bounds):
 
     def to_sql_model(self, img: Any, session: Any) -> Any:
         """转为分类标注实体。"""
-        from ..entity_model import TCategory, TClassifyAnno, select
+        from sqlmodel import select
+
+        from .db import TCategory, TClassifyAnno
 
         category = session.exec(
             select(TCategory).where(TCategory.idx == self.category_idx)
@@ -630,7 +632,9 @@ class Box(Bounds):
 
     def to_sql_model(self, img: Any, session: Any) -> Any:
         """转为检测标注实体。"""
-        from ..entity_model import TCategory, TDetectAnno, select
+        from sqlmodel import select
+
+        from .db import TCategory, TDetectAnno
 
         category = session.exec(
             select(TCategory).where(TCategory.idx == self.category_idx)
@@ -932,16 +936,16 @@ class Polygon(Bounds):
         }
 
     def to_sql_model(self, img: Any, session: Any) -> Any:
-        """转为分割标注实体（顶点序列以 pickle 存储，与旧版一致）。"""
-        import pickle
+        """转为分割标注实体（顶点序列以 JSON 文本存储）。"""
+        from sqlmodel import select
 
-        from ..entity_model import TCategory, TSegmentAnno, select
+        from .db import TCategory, TSegmentAnno, pack_points
 
         category = session.exec(
             select(TCategory).where(TCategory.idx == self.category_idx)
         ).one()
         return TSegmentAnno(
-            points=pickle.dumps(self.points),
+            points=pack_points(self.points),
             conf=self.conf,
             img=img,
             category=category,

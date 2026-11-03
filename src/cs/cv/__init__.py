@@ -31,6 +31,7 @@
 :mod:`cs.cv.annotation` YOLO 标签文件与数据集扫描、统计、比对
 :mod:`cs.cv.infer`      :class:`Model`：加载 / 预测 / 跟踪 / 训练 / 验证 / 导出
 :mod:`cs.cv.core`       :class:`Cv` 门面
+:mod:`cs.cv.db`         标注平台数据库表（SQLModel + 本地 SQLite）
 ======================  ====================================================
 
 依赖约定：``opencv-python`` / ``numpy`` / ``shapely`` 为必需依赖；
