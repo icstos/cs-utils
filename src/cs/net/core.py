@@ -217,7 +217,7 @@ class Net:
     def get(
         url: str, *, timeout: float = DEFAULT_TIMEOUT, **options: Any
     ) -> HttpResponse:
-        """GET。"""
+        """发起 GET 请求。"""
         return get(url, timeout=timeout, **options)
 
     @staticmethod
@@ -228,7 +228,7 @@ class Net:
         timeout: float = DEFAULT_TIMEOUT,
         **options: Any,
     ) -> HttpResponse:
-        """POST JSON。"""
+        """以 JSON 形式发起 POST 请求。"""
         return post_json(url, payload, timeout=timeout, **options)
 
     @staticmethod

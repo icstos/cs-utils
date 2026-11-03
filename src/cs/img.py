@@ -1,11 +1,11 @@
-"""Image utilities: header-based metadata extraction, I/O, and format conversion.
+"""图像工具：基于文件头的元数据解析、读写与格式转换。
 
-Detects size / DPI / color count / channel count from binary file headers.
-Supported: GIF, PNG, JPEG, JPEG2000, HEIF/AVIF, TIFF, BigTIFF, SVG, Netpbm,
-WebP, BMP.
+直接从二进制文件头解析尺寸 / DPI / 颜色数 / 通道数，
+支持 GIF、PNG、JPEG、JPEG2000、HEIF/AVIF、TIFF、BigTIFF、SVG、Netpbm、
+WebP、BMP。
 
-Optimised for Python ≥3.14 — uses PEP 695 ``type`` aliases, precompiled
-``struct.Struct``, ``memoryview``, and ``contextlib.suppress``.
+面向 Python ≥3.14 优化：使用 PEP 695 ``type`` 别名、预编译的
+``struct.Struct``、``memoryview`` 与 ``contextlib.suppress``。
 """
 
 import base64
@@ -26,7 +26,7 @@ from PIL import Image
 from .my_types import ImgSize
 
 # ============================================================
-# Precompiled patterns, constants & structs
+# 预编译正则、常量与 struct
 # ============================================================
 
 _RE_SVG_W = re.compile(r'[^-]width="(.*?)"')
@@ -36,8 +36,8 @@ _RE_CSS = re.compile(r"(\d+(?:\.\d+)?)?([a-z]*)$")
 _UNIT_DENSITY: dict[int, float] = {
     -3: 0.000_025_4,
     -2: 0.000_254,
-    -1: 0.002_54,  # km, hm, dam
-    0: 0.025_4,  # m
+    -1: 0.002_54,  # 千米、百米、十米
+    0: 0.025_4,  # 米
     1: 0.254,
     2: 2.54,
     3: 25.4,
@@ -69,7 +69,7 @@ _HEIF_BRANDS: frozenset[bytes] = frozenset(
 )
 _JPEG_NO_SOF: frozenset[int] = frozenset({0xC4, 0xC8, 0xCC})
 
-# Magic bytes
+# 文件头魔数
 _B_PNG = b"\x89PNG\r\n\x1a\n"
 _B_JPEG = b"\xff\xd8"
 _B_JP2 = b"\x00\x00\x00\x0cjP  \r\n\x87\n"
@@ -81,7 +81,7 @@ _GIF87a, _GIF89a = b"GIF87a", b"GIF89a"
 _PNG_CH: dict[int, int] = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
 _PNG_CL: dict[int, int] = {0: 1, 2: 3, 3: 1, 4: 1, 6: 3}
 
-# ---- Precompiled struct helpers (significant perf win) ----
+# ---- 预编译 struct 解析器（性能提升明显） ----
 _S = struct.Struct
 _U16_BE = _S(">H")
 _U32_BE = _S(">L")
@@ -103,13 +103,13 @@ _BMP_BD = _S("<H")
 
 
 # ============================================================
-# Protocols & types
+# 协议与类型
 # ============================================================
 
 
 @runtime_checkable
 class ReadSeekBinary(Protocol):
-    """Readable, seekable binary stream."""
+    """可读、可定位的二进制流。"""
 
     def read(self, size: int = -1, /) -> bytes: ...
     def seek(self, offset: int, whence: int = 0, /) -> int: ...
@@ -122,7 +122,7 @@ type FileInput = PathInput | BinaryIO | ReadSeekBinary
 
 
 class ImageInfo(NamedTuple):
-    """Image metadata."""
+    """图像元数据。"""
 
     width: int = -1
     height: int = -1
@@ -133,12 +133,12 @@ class ImageInfo(NamedTuple):
 
 
 # ============================================================
-# General helpers
+# 通用工具
 # ============================================================
 
 
 def _open_file(path: FileInput) -> tuple[BinaryIO | ReadSeekBinary, bool]:
-    """Open a path / URL / file-like → (handle, should_close)."""
+    """打开路径 / URL / 文件对象 → (句柄, 是否需要关闭)。"""
     match path:
         case BinaryIO() | ReadSeekBinary():
             return path, False
@@ -152,7 +152,7 @@ def _open_file(path: FileInput) -> tuple[BinaryIO | ReadSeekBinary, bool]:
 
 
 def _to_dpi(density: int, unit: int) -> int:
-    """Convert *density* in TIFF/pHYS unit → standard DPI."""
+    """把 TIFF/pHYS 单位下的 *density* 换算为标准 DPI。"""
     return (
         int(density * _UNIT_DENSITY.get(unit, 1) + 0.5)
         if unit in _UNIT_DENSITY
@@ -161,7 +161,7 @@ def _to_dpi(density: int, unit: int) -> int:
 
 
 def _css_to_px(value: str) -> float:
-    """'2cm' | '100px' → px at 96 DPI."""
+    """'2cm' | '100px' → 96 DPI 下的像素值。"""
     if m := _RE_CSS.fullmatch(value):
         n, u = m.group(1), m.group(2) or "px"
         return (float(n) if n else 0.0) * _CSS_PX.get(u, 0)
@@ -169,7 +169,7 @@ def _css_to_px(value: str) -> float:
 
 
 def _read_jpeg_seg(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """Read JPEG segment → (marker, data_size)."""
+    """读取 JPEG 段 → (标记, 数据长度)。"""
     while (b := f.read(1)) == b"\xff":
         pass
     if not b:
@@ -181,7 +181,7 @@ def _read_jpeg_seg(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 def _seek_jpeg_sof(f: BinaryIO | ReadSeekBinary) -> None:
-    """Fast-forward to JPEG SOF marker."""
+    """快进到 JPEG 的 SOF 标记。"""
     size, m = 2, 0
     while not (0xC0 <= m <= 0xCF and m not in _JPEG_NO_SOF):
         f.seek(size, 1)
@@ -189,12 +189,12 @@ def _seek_jpeg_sof(f: BinaryIO | ReadSeekBinary) -> None:
 
 
 # ============================================================
-# ISO box parser (HEIF / AVIF shared)
+# ISO box 解析（HEIF / AVIF 共用）
 # ============================================================
 
 
 def _iso_boxes(data: memoryview, start: int, end: int):
-    """Yield (offset, size, box_type, header_size) for ISO BMFF boxes."""
+    """逐个产出 ISO BMFF box 的 (偏移, 大小, box 类型, 头长度)。"""
     off = start
     while off + 8 <= end:
         sz = int.from_bytes(data[off : off + 4], "big")
@@ -215,12 +215,12 @@ def _iso_boxes(data: memoryview, start: int, end: int):
 
 
 def _heif_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """Extract width & height from HEIF / AVIF metadata."""
+    """从 HEIF / AVIF 元数据中提取宽高。"""
     f.seek(0)
     d = memoryview(f.read())
     n = len(d)
 
-    # locate 'meta'
+    # 定位 'meta' box
     meta = next(((o, s, h) for o, s, t, h in _iso_boxes(d, 0, n) if t == b"meta"), None)
     if not meta:
         return -1, -1
@@ -254,7 +254,7 @@ def _heif_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
                 if cur + esz > pe:
                     break
                 if d[cur + 4 : cur + 8] == b"infe":
-                    pass  # item entry – skip for brevity (not needed if we use iprp)
+                    pass  # 条目项——此处跳过，尺寸改从 iprp 取
                 cur += esz
         elif bt == b"iprp":
             for po, ps2, pt, ph in _iso_boxes(d, ps, pe):
@@ -310,17 +310,17 @@ def _heif_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 # ============================================================
-# Size detection
+# 尺寸探测
 # ============================================================
 
 
 def _get_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """Detect (width, height) from file header."""
+    """从文件头探测 (宽, 高)。"""
     f.seek(0)
     head = memoryview(f.read(64))
     sz = len(head)
 
-    # ----- fast 2-byte checks first -----
+    # ----- 先做 2 字节快速判定 -----
     if sz < 2:
         return -1, -1
 
@@ -336,7 +336,7 @@ def _get_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
     b8 = bytes(head[:8])
 
-    # ----- 4–6 byte signatures -----
+    # ----- 4–6 字节签名 -----
     if sz >= 10 and b8[:6] in (_GIF87a, _GIF89a):
         return _2I16_LE.unpack(head[6:10])
 
@@ -389,7 +389,7 @@ def _get_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 def _tiff_size(
     f: BinaryIO | ReadSeekBinary, head: memoryview, e: str
 ) -> tuple[int, int]:
-    """TIFF width & height."""
+    """TIFF 宽高。"""
     offset = struct.unpack(f">{e}L" if e == ">" else f"<{e}L", head[4:8])[0]
     f.seek(offset)
     cnt = struct.unpack(f">{e}H" if e == ">" else f"<{e}H", f.read(2))[0]
@@ -408,7 +408,7 @@ def _tiff_size(
 
 
 def _bigtiff_size(f: BinaryIO | ReadSeekBinary, head: memoryview) -> tuple[int, int]:
-    """BigTIFF width & height."""
+    """BigTIFF 宽高。"""
     if _U32_LE.unpack(head[4:8])[0] != 8:
         raise ValueError("BigTIFF: bad offset")
     f.seek(_U64_LE.unpack(head[8:16])[0])
@@ -427,7 +427,7 @@ def _bigtiff_size(f: BinaryIO | ReadSeekBinary, head: memoryview) -> tuple[int, 
 
 
 def _netpbm_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """Netpbm width & height."""
+    """Netpbm 宽高。"""
     f.seek(2)
     nums: list[int] = []
     while True:
@@ -450,7 +450,7 @@ def _netpbm_size(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 def _webp_size(head: memoryview) -> tuple[int, int]:
-    """WebP width & height."""
+    """WebP 宽高。"""
     sub = bytes(head[12:16])
     if sub == b"VP8 ":
         return _U16_LE.unpack_from(head, 26)
@@ -468,12 +468,12 @@ def _webp_size(head: memoryview) -> tuple[int, int]:
 
 
 # ============================================================
-# DPI detection
+# DPI 探测
 # ============================================================
 
 
 def _get_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """Detect (xdpi, ydpi) from file header."""
+    """从文件头探测 (横向 DPI, 纵向 DPI)。"""
     f.seek(0)
     head = f.read(24)
     sz = len(head)
@@ -494,7 +494,7 @@ def _get_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 def _png_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """PNG pHYs chunk → DPI."""
+    """PNG 的 pHYs 块 → DPI。"""
     off = 8
     while True:
         f.seek(off)
@@ -511,7 +511,7 @@ def _png_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 def _jpeg_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """JPEG APP0/JFIF → DPI."""
+    """JPEG 的 APP0/JFIF 段 → DPI。"""
     f.seek(0)
     size, m = 2, 0
     while not (0xC0 <= m <= 0xCF):
@@ -530,7 +530,7 @@ def _jpeg_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 def _jp2_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
-    """JPEG2000 resolution box → DPI."""
+    """JPEG2000 的分辨率 box → DPI。"""
     f.seek(32)
     left = _U32_BE.unpack(f.read(4))[0] - 8
     f.seek(4, 1)
@@ -556,12 +556,12 @@ def _jp2_dpi(f: BinaryIO | ReadSeekBinary) -> tuple[int, int]:
 
 
 # ============================================================
-# Colour / channel detection
+# 颜色数 / 通道数探测
 # ============================================================
 
 
 def _get_colors(f: BinaryIO | ReadSeekBinary) -> int:
-    """Detect colour count from header."""
+    """从文件头探测颜色数。"""
     f.seek(0)
     h = memoryview(f.read(32))
     sz = len(h)
@@ -579,7 +579,7 @@ def _get_colors(f: BinaryIO | ReadSeekBinary) -> int:
 
 
 def _get_channels(f: BinaryIO | ReadSeekBinary) -> int:
-    """Detect channel count from header."""
+    """从文件头探测通道数。"""
     f.seek(0)
     h = memoryview(f.read(32))
     sz = len(h)
@@ -603,7 +603,7 @@ def _get_channels(f: BinaryIO | ReadSeekBinary) -> int:
 
 
 # ============================================================
-# Public API
+# 对外接口
 # ============================================================
 
 
@@ -615,7 +615,7 @@ def get_info(
     colors: bool = True,
     channels: bool = True,
 ) -> ImageInfo:
-    """Extract full image metadata from a file path, URL, or file-like object."""
+    """从文件路径、URL 或文件对象中提取完整图像元数据。"""
     fh, do_close = _open_file(path)
     try:
         w = h = xd = yd = cc = ch = -1
@@ -634,14 +634,14 @@ def get_info(
 
 
 def get(path: FileInput) -> tuple[int, int]:
-    """Return (width, height)."""
+    """返回 (宽, 高)。"""
     with suppress(Exception):
         return get_info(path, size=True, dpi=False, colors=False, channels=False)[:2]
     return -1, -1
 
 
 def get_dpi(path: FileInput) -> tuple[int, int]:
-    """Return (horizontal DPI, vertical DPI)."""
+    """返回 (横向 DPI, 纵向 DPI)。"""
     with suppress(Exception):
         info = get_info(path, size=False, dpi=True, colors=False)
         return info.xdpi, info.ydpi
@@ -649,14 +649,14 @@ def get_dpi(path: FileInput) -> tuple[int, int]:
 
 
 # ============================================================
-# Img utility class
+# Img 工具类
 # ============================================================
 
 
 class Img:
-    """Image generation, I/O, format conversion, and processing."""
+    """图像生成、读写、格式转换与处理。"""
 
-    # ---- Generation ----
+    # ---- 生成 ----
 
     @staticmethod
     def generate_img(size: ImgSize, *, is_gray: bool = True) -> np.ndarray:
@@ -678,7 +678,7 @@ class Img:
                 target=Img.generate_thumbnail, args=(f, (size, size)), daemon=True
             ).start()
 
-    # ---- I/O ----
+    # ---- 读写 ----
 
     @staticmethod
     def load(path: str | Path, flags: int = -1) -> np.ndarray:
@@ -722,7 +722,7 @@ class Img:
             if dc:
                 fh.close()
 
-    # ---- Transforms ----
+    # ---- 变换 ----
 
     @staticmethod
     def resize(img: np.ndarray, new_size: ImgSize) -> np.ndarray:
@@ -769,10 +769,10 @@ class Img:
             if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.bmp', '.tiff'}:
                 Img.save(dst / f.name, Img.resize(Img.load(f), new_size))
 
-    # ---- Conversion helpers ----
+    # ---- 格式转换 ----
 
     class Convert:
-        """Format conversion utilities."""
+        """格式转换工具。"""
 
         @staticmethod
         def save_by_img_type(img_input, path: str | Path) -> None:
@@ -929,7 +929,7 @@ class Img:
             cv2.imwrite(str(dst), img)
 
     class Process:
-        """Image processing filters."""
+        """图像处理滤镜。"""
 
         @staticmethod
         def equalize(img: np.ndarray) -> np.ndarray:

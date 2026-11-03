@@ -1,17 +1,17 @@
 """
-Time utilities module — Python 3.12 optimized version
+时间工具模块——面向 Python 3.12 优化
 
-Provides time-related utility functions:
-- Time retrieval and formatting
-- Timezone handling
-- Timers
-- Time difference calculation
+提供与时间相关的工具函数：
+- 时间获取与格式化
+- 时区处理
+- 计时器
+- 时间差计算
 
-Time formats:
-1. timestamp: seconds since 1970-01-01 00:00:00 UTC (float)
-2. struct_time: time.struct_time
-3. string time: '2024-01-01 12:00:00'
-4. datetime object: datetime.datetime
+支持的时间表示：
+1. timestamp：自 1970-01-01 00:00:00 UTC 起的秒数（float）
+2. struct_time：time.struct_time
+3. 字符串时间：'2024-01-01 12:00:00'
+4. datetime 对象：datetime.datetime
 """
 
 from __future__ import annotations
@@ -45,15 +45,15 @@ __all__ = [
     "timeit",
 ]
 
-# === Common format constants ===
+# === 常用格式常量 ===
 DEFAULT_FORMAT = "%Y-%m-%d %H:%M:%S"
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 DATE_FORMAT = "%Y-%m-%d"
 
 
-# === Local timezone (cached, avoid repeated detection) ===
+# === 本地时区（缓存一次，避免重复探测） ===
 def _detect_local_tz() -> timezone:
-    """Detect local timezone via system offset, no third-party library needed."""
+    """根据系统偏移探测本地时区，无需第三方库。"""
     offset = -time.altzone if time.daylight else -time.timezone
     return timezone(timedelta(seconds=offset))
 
@@ -61,9 +61,9 @@ def _detect_local_tz() -> timezone:
 LOCAL_TZ: timezone = _detect_local_tz()
 
 
-# === Greeting (preserve original behavior) ===
+# === 问候语（保持原有行为） ===
 def human_time() -> str:
-    """Return English greeting based on current hour."""
+    """按当前小时返回英文问候语。"""
     h = datetime.now().hour
     return (
         "Morning"
@@ -72,41 +72,41 @@ def human_time() -> str:
     )
 
 
-# === Convenient functions (recommended calling style) ===
+# === 便捷函数（推荐的调用方式） ===
 def now(tz: timezone | None = None) -> datetime:
-    """Get current time. Uses local timezone if ``tz`` is None."""
+    """获取当前时间；``tz`` 为 None 时使用本地时区。"""
     return datetime.now(tz or LOCAL_TZ)
 
 
 def today() -> date:
-    """Get today's date."""
+    """获取今天的日期。"""
     return date.today()
 
 
 def yesterday() -> date:
-    """Get yesterday's date."""
+    """获取昨天的日期。"""
     return today() - timedelta(days=1)
 
 
 def tomorrow() -> date:
-    """Get tomorrow's date."""
+    """获取明天的日期。"""
     return today() + timedelta(days=1)
 
 
 def timestamp() -> float:
-    """Get current timestamp (seconds)."""
+    """获取当前时间戳（秒）。"""
     return time.time()
 
 
 def get_time_dif(start: float) -> timedelta:
-    """Get elapsed time since ``start`` (timedelta)."""
+    """获取自 ``start`` 起经过的时间（timedelta）。"""
     return timedelta(seconds=int(round(time.time() - start)))
 
 
 def to_datetime(
     value: str | datetime | time.struct_time, fmt: str = DEFAULT_FORMAT
 ) -> datetime:
-    """Convert string / struct_time to ``datetime`` with local timezone."""
+    """把字符串 / struct_time 转换为带本地时区的 ``datetime``。"""
     match value:
         case datetime() as dt:
             return dt if dt.tzinfo else dt.replace(tzinfo=LOCAL_TZ)
@@ -121,7 +121,7 @@ def to_datetime(
 def to_timestamp(
     value: str | datetime | time.struct_time, fmt: str = DEFAULT_FORMAT
 ) -> float:
-    """Convert to timestamp."""
+    """转换为时间戳。"""
     match value:
         case str() as s:
             return time.mktime(time.strptime(s, fmt))
@@ -136,7 +136,7 @@ def to_timestamp(
 def to_str(
     value: float | datetime | time.struct_time | None = None, fmt: str = DEFAULT_FORMAT
 ) -> str:
-    """Format as string. Uses current time if ``value`` is None."""
+    """格式化为字符串；``value`` 为 None 时使用当前时间。"""
     if value is None:
         return time.strftime(fmt, time.localtime())
     match value:
@@ -153,7 +153,7 @@ def to_str(
 def to_struct(
     value: str | float | datetime, fmt: str = DEFAULT_FORMAT
 ) -> time.struct_time:
-    """Convert to struct_time."""
+    """转换为 struct_time。"""
     match value:
         case str() as s:
             return time.strptime(s, fmt)
@@ -166,7 +166,7 @@ def to_struct(
 
 
 def format_diff(seconds: float) -> str:
-    """Format seconds as human-readable string like 'X days X hours X min X sec'."""
+    """把秒数格式化为可读字符串，如“X天X小时X分X秒”。"""
     td = timedelta(seconds=int(seconds))
     days = td.days
     hours, rem = divmod(td.seconds, 3600)
@@ -180,10 +180,10 @@ def format_diff(seconds: float) -> str:
     return "".join(parts) or "0s"
 
 
-# === Timers ===
+# === 计时器 ===
 @contextmanager
 def timeit(name: str = ""):
-    """Timing context manager::
+    """计时上下文管理器::
 
     with timeit("step"):
         do_something()
@@ -196,7 +196,7 @@ def timeit(name: str = ""):
 
 
 def timer(func: Callable | None = None, *, print_result: bool = True):
-    """Timing decorator, supports ``@timer`` and ``@timer(print_result=False)``."""
+    """计时装饰器，支持 ``@timer`` 与 ``@timer(print_result=False)``。"""
 
     def decorator(f: Callable) -> Callable:
         @wraps(f)
@@ -213,15 +213,15 @@ def timer(func: Callable | None = None, *, print_result: bool = True):
     return decorator(func) if func is not None else decorator
 
 
-# === Time class (backward compatible: preserve original method names and signatures) ===
+# === Time 类（向后兼容：保留原有方法名与签名） ===
 @dataclass(slots=True)
 class Time:
-    """Time data class.
+    """时间数据类。
 
-    Fields: ``year / month / day / hour / minute / second / microsecond``.
-    ``add`` / ``subtract`` return new instances immutably (fixed the original bug
-    where ``self.month = self.year + months`` incorrectly wrote to ``self.month``,
-    and uses keyword-only arguments to avoid positional ambiguity).
+    字段：``year / month / day / hour / minute / second / microsecond``。
+    ``add`` / ``subtract`` 以不可变方式返回新实例（修正了原先
+    ``self.month = self.year + months`` 误写入 ``self.month`` 的缺陷），
+    并改用仅关键字参数，避免位置参数歧义。
     """
 
     year: int = 0
@@ -232,7 +232,7 @@ class Time:
     second: int = 0
     microsecond: int = 0
 
-    # --- Instance methods: offset from self ---
+    # --- 实例方法：基于自身做偏移 ---
     def add(
         self,
         *,
@@ -244,7 +244,7 @@ class Time:
         seconds: int = 0,
         microseconds: int = 0,
     ) -> Self:
-        """Add time interval to current instance, return new instance."""
+        """在当前实例上增加时间间隔，返回新实例。"""
         return self.__class__(
             year=self.year + years,
             month=self.month + months,
@@ -266,7 +266,7 @@ class Time:
         seconds: int = 0,
         microseconds: int = 0,
     ) -> Self:
-        """Subtract time interval from current instance, return new instance."""
+        """在当前实例上减去时间间隔，返回新实例。"""
         return self.__class__(
             year=self.year - years,
             month=self.month - months,
@@ -278,50 +278,50 @@ class Time:
         )
 
     def diff(self, other: Self) -> timedelta:
-        """Calculate time difference from another ``Time`` (not implemented: fields don't form valid timestamps)."""
+        """与另一个 ``Time`` 计算时间差（未实现：各字段拼不成合法时间戳）。"""
         raise NotImplementedError(
             "Time fields do not form valid timestamps, cannot compute difference directly"
         )
 
-    # --- Static/class methods: preserve original Time public API ---
+    # --- 静态 / 类方法：保留原有 Time 公开接口 ---
     @staticmethod
     def now() -> datetime:
-        """Get current local time."""
+        """获取当前本地时间。"""
         return now()
 
     @staticmethod
     def utcnow() -> datetime:
-        """Get current UTC time."""
+        """获取当前 UTC 时间。"""
         return datetime.now(UTC)
 
     @staticmethod
     def today() -> str:
-        """Get today's date string ``YYYY-MM-DD``."""
+        """获取今天的日期字符串 ``YYYY-MM-DD``。"""
         return to_str(fmt=DATE_FORMAT)
 
     @staticmethod
     def yesterday() -> date:
-        """Get yesterday's date."""
+        """获取昨天的日期。"""
         return yesterday()
 
     @staticmethod
     def tomorrow() -> date:
-        """Get tomorrow's date."""
+        """获取明天的日期。"""
         return tomorrow()
 
     @staticmethod
     def get_date() -> str:
-        """Get today's date string."""
+        """获取今天的日期字符串。"""
         return to_str(fmt=DATE_FORMAT)
 
     @classmethod
     def get_time_str(cls) -> str:
-        """Get current time string ``YYYY-MM-DD-HH-MM-SS``."""
+        """获取当前时间字符串 ``YYYY-MM-DD-HH-MM-SS``。"""
         return time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
 
     @staticmethod
     def to_timestamp(value: str | None, str_format: str = DEFAULT_FORMAT) -> float:
-        """Convert string (may contain ``%f`` microseconds) to timestamp. Returns current timestamp if ``value`` is None."""
+        """把字符串（可含 ``%f`` 微秒）转换为时间戳；``value`` 为 None 时返回当前时间戳。"""
         if value is None:
             return time.time()
         if "%f" in str_format:
@@ -335,19 +335,19 @@ class Time:
     def to_time_str(
         value: float | time.struct_time | None = None, str_format: str = DEFAULT_FORMAT
     ) -> str:
-        """Convert value to time string."""
+        """把时间值转换为字符串。"""
         return to_str(value, str_format)
 
     @staticmethod
     def to_time_struct(
         value: str | float, str_format: str = DEFAULT_FORMAT
     ) -> time.struct_time:
-        """Convert value to struct_time."""
+        """把时间值转换为 struct_time。"""
         return to_struct(value, str_format)
 
     @staticmethod
     def get_time_diff(timestamp_str_1: str, timestamp_str_2: str) -> float:
-        """Time difference between two ``'%Y-%m-%d %H:%M:%S.%f'`` strings (seconds, absolute)."""
+        """两个 ``'%Y-%m-%d %H:%M:%S.%f'`` 字符串之间的时间差（秒，取绝对值）。"""
         fmt = "%Y-%m-%d %H:%M:%S.%f"
 
         def _to_ts(s: str) -> float:
@@ -357,7 +357,7 @@ class Time:
 
     @staticmethod
     def get_weekly_date() -> str:
-        """Get weekly date range ``YYYY.MM.DD-YYYY.MM.DD``."""
+        """获取本周的日期区间 ``YYYY.MM.DD-YYYY.MM.DD``。"""
         d = date.today()
         start = d - timedelta(days=d.weekday())
         end = start + timedelta(days=6)
@@ -365,7 +365,7 @@ class Time:
 
     @staticmethod
     def get_month_date() -> str:
-        """Get monthly date range ``YYYY.MM.DD-YYYY.MM.DD``."""
+        """获取本月的日期区间 ``YYYY.MM.DD-YYYY.MM.DD``。"""
         d = date.today()
         first = d.replace(day=1)
         if first.month == 12:
@@ -376,7 +376,7 @@ class Time:
 
 
 def _format_range(start: date, end: date) -> str:
-    """Format start and end dates as ``YYYY.MM.DD-YYYY.MM.DD``."""
+    """把起止日期格式化为 ``YYYY.MM.DD-YYYY.MM.DD``。"""
     return (
         f"{start.year}.{start.month:0>2}.{start.day:0>2}"
         f"-{end.year}.{end.month:0>2}.{end.day:0>2}"
@@ -384,7 +384,7 @@ def _format_range(start: date, end: date) -> str:
 
 
 if __name__ == "__main__":
-    # Demonstrate convenient calls
+    # 演示便捷调用
     print("now           :", now())
     print("now(UTC)      :", now(UTC))
     print("today         :", today())

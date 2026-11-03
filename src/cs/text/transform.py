@@ -242,22 +242,22 @@ def split_words(text: str) -> list[str]:
 
 
 def snake(text: str) -> str:
-    """``userID`` → ``user_id``。"""
+    """转下划线命名：``userID`` → ``user_id``。"""
     return "_".join(word.lower() for word in split_words(text))
 
 
 def kebab(text: str) -> str:
-    """``user_id`` → ``user-id``。"""
+    """转连字符命名：``user_id`` → ``user-id``。"""
     return "-".join(word.lower() for word in split_words(text))
 
 
 def constant(text: str) -> str:
-    """``user_id`` → ``USER_ID``。"""
+    """转常量命名：``user_id`` → ``USER_ID``。"""
     return "_".join(word.upper() for word in split_words(text))
 
 
 def camel(text: str) -> str:
-    """``user_id`` → ``userId``。"""
+    """转小驼峰命名：``user_id`` → ``userId``。"""
     words = split_words(text)
     if not words:
         return ""
@@ -266,7 +266,7 @@ def camel(text: str) -> str:
 
 
 def pascal(text: str) -> str:
-    """``user_id`` → ``UserId``。"""
+    """转大驼峰命名：``user_id`` → ``UserId``。"""
     return "".join(word.capitalize() for word in split_words(text))
 
 

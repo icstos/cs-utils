@@ -4,7 +4,7 @@ import asyncio
 
 
 def test_keyboard_ctrl_triggers_callback():
-    """Start a keyboard listener, simulate pressing Ctrl, and expect 'test' printed."""
+    """启动键盘监听，模拟按下 Ctrl，期望打印出 'test'。"""
 
     def on_press(evt: KeyboardEvent):
         if "ctrl" in evt.key.lower():
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # print("\n开始键盘监听 (3 秒)，请按键...")
     # events: list[KeyboardEvent] = []
     # with Auto.KeyBoard.listen(on_press=events.append):
-    #     time.sleep(3)b
+    #     time.sleep(3)
     # print(f"监听到 {len(events)} 个键盘事件： {events}")
     # Auto.show_msg('你好')
     # time.sleep(2)

@@ -1,8 +1,7 @@
-"""YAML utilities: modernized for Python 3.14.
+"""YAML 工具：面向 Python 3.14 现代化。
 
-Provides safe loading and saving with Path support and optional
-filename annotation. Non-printable characters are removed before
-parsing to make loading robust for messy files.
+提供安全读写，支持 Path 与可选的文件名注解；解析前会剔除
+不可打印字符，让脏文件的加载更稳健。
 """
 
 import re
@@ -11,7 +10,7 @@ from typing import Any
 
 import yaml
 
-# Compile the sanitizer regex once at module import.
+# 清洗用正则在模块导入时编译一次，避免重复开销。
 _NON_PRINTABLE_RE = re.compile(
     r"[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+",
     flags=re.UNICODE,
@@ -19,9 +18,9 @@ _NON_PRINTABLE_RE = re.compile(
 
 
 class Yaml:
-    """Simple YAML helper with Path support.
+    """简洁的 YAML 读写工具，支持 Path。
 
-    Methods:
+    方法：
     - `load(file, append_filename=False) -> dict[str, Any]`
     - `save(obj, file, allow_unicode=True) -> None`
     """
@@ -36,7 +35,7 @@ class Yaml:
 
         text = path.read_text(encoding="utf-8", errors="ignore")
 
-        # Remove pathological non-printable characters before parsing.
+        # 解析前先剔除异常字符（不可打印字符）
         if not text.isprintable():
             text = _NON_PRINTABLE_RE.sub("", text)
 

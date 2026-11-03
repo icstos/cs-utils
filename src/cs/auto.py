@@ -1,10 +1,10 @@
 """
-Auto - Automation utilities built on pynput + tkinter (Python 3.12+)
+Auto —— 基于 pynput + tkinter 的自动化工具（Python 3.12+）
 
-Features:
-- Mouse: mouse control + event listening (context manager)
-- KeyBoard: keyboard control + event listening (context manager)
-- Msg: message dialogs (tkinter, pyautogui-like)
+功能：
+- Mouse：鼠标控制 + 事件监听（上下文管理器）
+- KeyBoard：键盘控制 + 事件监听（上下文管理器）
+- Msg：消息对话框（tkinter 实现，用法类似 pyautogui）
 """
 
 from __future__ import annotations
@@ -22,23 +22,23 @@ from pynput import keyboard, mouse
 from pynput.keyboard import Key, KeyCode
 from pynput.mouse import Button as MouseButton
 
-# Windows: align Listener and Controller coordinates (recommended by pynput)
+# Windows：对齐 Listener 与 Controller 的坐标（pynput 官方建议）
 if sys.platform == "win32":
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor V2
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # 逐显示器 V2
     except (AttributeError, OSError):
         try:
             ctypes.windll.user32.SetProcessDPIAware()
         except (AttributeError, OSError):
             pass
 
-# ============ Type aliases (PEP 695) ============
+# ============ 类型别名（PEP 695） ============
 type Point = tuple[int, int]
-type Region = tuple[int, int, int, int]  # (x, y, width, height)
+type Region = tuple[int, int, int, int]  # (x, y, 宽, 高)
 type KeyName = str | Key | KeyCode
 type ResolvedKey = Key | KeyCode | str
 
-# ============ Constants ============
+# ============ 常量 ============
 _BUTTON_MAP: dict[str, MouseButton] = {
     "left": MouseButton.left,
     "right": MouseButton.right,
@@ -59,7 +59,7 @@ _KEY_ALIASES: dict[str, Key] = {
     "return": Key.enter,
 }
 
-# Reuse Controller instances to avoid repeated creation (pynput recommends keeping them long-lived)
+# 复用 Controller 实例，避免反复创建（pynput 建议长期持有）
 _mouse = mouse.Controller()
 _kb = keyboard.Controller()
 
@@ -67,7 +67,7 @@ _pause: float = 0.05
 
 
 def set_pause(seconds: float) -> None:
-    """Set the global pause duration after each automation action."""
+    """设置每次自动化动作之后的全局停顿时间。"""
     global _pause
     _pause = float(seconds)
 
@@ -83,7 +83,7 @@ def _sleep(duration: float | None = None) -> None:
 
 
 def _resolve_key(key: KeyName) -> ResolvedKey:
-    """Resolve key names: supports 'enter', Key.enter, 'win', etc."""
+    """解析按键名：支持 'enter'、Key.enter、'win' 等写法。"""
     match key:
         case str():
             low = key.lower().removeprefix("<").removesuffix(">")
@@ -109,7 +109,7 @@ def _resolve_button(button: str) -> MouseButton:
 def _ease_move(
     ctrl: mouse.Controller, x: int, y: int, duration: float, *, relative: bool = False
 ) -> None:
-    """Move with ease-out easing; if duration <= 0, move instantly."""
+    """以 ease-out 缓动移动；duration <= 0 时瞬间到位。"""
     if duration <= 0:
         if relative:
             ctrl.move(x, y)
@@ -125,7 +125,7 @@ def _ease_move(
 
     for i in range(1, steps + 1):
         t = i / steps
-        eased = 1 - (1 - t) ** 3  # ease-out cubic
+        eased = 1 - (1 - t) ** 3  # 三次方 ease-out
         ctrl.position = (
             int(start_x + (end_x - start_x) * eased),
             int(start_y + (end_y - start_y) * eased),
@@ -135,7 +135,7 @@ def _ease_move(
 
 @contextmanager
 def _start_listener(listener: mouse.Listener | keyboard.Listener) -> Iterator[None]:
-    """Start a pynput Listener non-blocking; ensure safe stop on exit."""
+    """以非阻塞方式启动 pynput 监听器，退出时确保安全停止。"""
     listener.start()
     try:
         yield
@@ -150,7 +150,7 @@ def _start_listener(listener: mouse.Listener | keyboard.Listener) -> Iterator[No
 
 @dataclass(slots=True)
 class MouseEvent:
-    """Mouse event record"""
+    """鼠标事件记录。"""
 
     x: int
     y: int
@@ -175,7 +175,7 @@ class MouseEvent:
 
 @dataclass(slots=True)
 class KeyboardEvent:
-    """Keyboard event record"""
+    """键盘事件记录。"""
 
     key: str
     event_type: Literal["press", "release"]
@@ -190,7 +190,7 @@ class KeyboardEvent:
 
 
 class _TkRoot:
-    """Thread-safe tkinter root window (singleton)."""
+    """线程安全的 tkinter 根窗口（单例）。"""
 
     __slots__ = ("root", "_lock")
     _instance: _TkRoot | None = None
@@ -334,10 +334,10 @@ def _run_tk_entry(
 
 
 class Auto:
-    """Top-level namespace for automation utilities."""
+    """自动化工具的顶层命名空间。"""
 
     class Mouse:
-        """Mouse control and listening (pynput.mouse.Controller / Listener)."""
+        """鼠标控制与监听（pynput.mouse.Controller / Listener）。"""
 
         @staticmethod
         def get_position() -> Point:
@@ -346,13 +346,13 @@ class Auto:
 
         @staticmethod
         def move_to(x: int, y: int, duration: float = 0.0) -> None:
-            """Move the mouse to absolute coordinates (uses ease-out if duration>0)."""
+            """把鼠标移动到绝对坐标（duration > 0 时使用 ease-out 缓动）。"""
             _ease_move(_mouse, x, y, duration)
             _sleep()
 
         @staticmethod
         def move(dx: int, dy: int, duration: float = 0.0) -> None:
-            """Move the mouse by a relative offset."""
+            """按相对偏移移动鼠标。"""
             _ease_move(_mouse, dx, dy, duration, relative=True)
             _sleep()
 
@@ -365,7 +365,7 @@ class Auto:
             interval: float = 0.0,
             duration: float = 0.0,
         ) -> None:
-            """Click the mouse (uses pynput Controller.click)."""
+            """点击鼠标（调用 pynput 的 Controller.click）。"""
             if x is not None and y is not None:
                 Auto.Mouse.move_to(x, y, duration)
             btn = _resolve_button(button)
@@ -402,13 +402,13 @@ class Auto:
 
         @staticmethod
         def scroll(dy: int, dx: int = 0) -> None:
-            """Scroll the wheel (dy positive = up, dx positive = right)."""
+            """滚动滚轮（dy 为正向上，dx 为正向右）。"""
             _mouse.scroll(dx, dy)
             _sleep()
 
         @staticmethod
         def drag(dx: int, dy: int, button: str = "left", duration: float = 0.5) -> None:
-            """Drag by a relative offset."""
+            """按相对偏移拖拽。"""
             btn = _resolve_button(button)
             _mouse.press(btn)
             try:
@@ -421,7 +421,7 @@ class Auto:
         def drag_to(
             x: int, y: int, button: str = "left", duration: float = 0.5
         ) -> None:
-            """Drag to an absolute position."""
+            """拖拽到绝对位置。"""
             btn = _resolve_button(button)
             _mouse.press(btn)
             try:
@@ -440,9 +440,9 @@ class Auto:
             suppress: bool = False,
         ) -> Iterator[list[MouseEvent]]:
             """
-            Mouse event listening context manager (non-blocking).
+            鼠标事件监听上下文管理器（非阻塞）。
 
-            Usage:
+            用法：
                 with Auto.Mouse.listen(on_click=print) as events:
                     time.sleep(5)
             """
@@ -488,14 +488,14 @@ class Auto:
                 yield events
 
     class KeyBoard:
-        """Keyboard control and listening (pynput.keyboard.Controller / Listener)."""
+        """键盘控制与监听（pynput.keyboard.Controller / Listener）。"""
 
         SPECIAL_KEYS = _SPECIAL_KEYS
         KEY_ALIASES = _KEY_ALIASES
 
         @staticmethod
         def write(text: str, interval: float = 0.0) -> None:
-            """Simulate typing a string (pynput Controller.type)."""
+            """模拟输入一段文本（pynput 的 Controller.type）。"""
             if interval <= 0:
                 _kb.type(text)
             else:
@@ -507,7 +507,7 @@ class Auto:
 
         @staticmethod
         def press(key: KeyName, count: int = 1, interval: float = 0.05) -> None:
-            """Press and release a key (pynput Controller.tap)."""
+            """按下并释放某个按键（pynput 的 Controller.tap）。"""
             resolved = _resolve_key(key)
             for i in range(max(1, count)):
                 _kb.tap(resolved)
@@ -527,7 +527,7 @@ class Auto:
 
         @staticmethod
         def hotkey(*keys: KeyName, interval: float = 0.1) -> None:
-            """Simulate hotkey combinations, e.g., KeyBoard.hotkey('ctrl', 'a')."""
+            """模拟组合键，例如 KeyBoard.hotkey('ctrl', 'a')。"""
             Auto.hotkey(*keys, interval=interval)
 
         @staticmethod
@@ -539,9 +539,9 @@ class Auto:
             suppress: bool = False,
         ) -> Iterator[list[KeyboardEvent]]:
             """
-            Keyboard event listening context manager (non-blocking).
+            键盘事件监听上下文管理器（非阻塞）。
 
-            Usage:
+            用法：
                 with Auto.KeyBoard.listen(on_press=print) as events:
                     time.sleep(5)
             """
@@ -564,12 +564,12 @@ class Auto:
             with _start_listener(listener):
                 yield events
 
-        # Backwards compatibility
+        # 向后兼容
         _resolve_key = staticmethod(_resolve_key)
         _key_to_str = staticmethod(_key_to_str)
 
     class Msg:
-        """Message dialogs (tkinter-based, pyautogui-like)."""
+        """消息对话框（基于 tkinter，用法类似 pyautogui）。"""
 
         @staticmethod
         def alert(title: str = "提示", text: str = "", button: str = "ok") -> str:
@@ -599,19 +599,19 @@ class Auto:
             return _run_tk_entry(title, text, default, password=True, mask=mask)
 
     class Screen:
-        """Screen utilities: screenshot and template matching for locating image center.
+        """屏幕工具：截图，以及用模板匹配定位图像中心。
 
-        Methods:
-        - `screenshot(region=None)`: return a PIL Image of the screen or region.
-        - `locate_center(template, region=None, threshold=0.8)`: locate the
-          template on screen and return center (x, y) or None if not found.
+        方法：
+        - `screenshot(region=None)`：返回整屏或指定区域的 PIL Image。
+        - `locate_center(template, region=None, threshold=0.8)`：在屏幕上匹配
+          模板，返回中心点 (x, y)，未找到则返回 None。
         """
 
         @staticmethod
         def screenshot(region: Region | None = None):
-            """Capture the screen or a region and return a PIL Image.
+            """截取整屏或指定区域，返回 PIL Image。
 
-            `region` is (x, y, width, height) or None for full screen.
+            `region` 为 (x, y, 宽, 高)，传 None 表示整屏。
             """
             try:
                 from PIL import ImageGrab
@@ -632,15 +632,15 @@ class Auto:
         def locate_center(
             template, region: Region | None = None, threshold: float = 0.8
         ) -> Point | None:
-            """Locate the center of `template` on the screen (or region).
+            """在屏幕（或指定区域）上定位 `template` 的中心。
 
-            `template` may be a PIL Image, a numpy array (H,W[,C]), or a path-like string.
-            Returns (x, y) in screen coordinates or None if not found.
+            `template` 可以是 PIL Image、numpy 数组（H,W[,C]）或路径字符串。
+            找到时返回屏幕坐标 (x, y)，否则返回 None。
             """
-            # take screenshot of region
+            # 截取指定区域
             screen_img = Auto.Screen.screenshot(region)
 
-            # lazy imports for image processing
+            # 延迟导入图像处理依赖
             try:
                 import cv2
                 import numpy as np
@@ -650,20 +650,20 @@ class Auto:
                     "locate_center requires opencv-python and pillow installed"
                 ) from e
 
-            # normalize template to numpy BGR
+            # 把模板统一为 numpy BGR
             if isinstance(template, str):
                 tpl = Image.open(template)
             elif hasattr(template, "convert"):
-                tpl = template  # PIL Image-like
+                tpl = template  # 类 PIL Image 对象
             else:
-                # assume numpy array
+                # 其余情况按 numpy 数组处理
                 tpl = None
 
             def pil_to_bgr(img_pil: Image.Image) -> np.ndarray:
                 arr = np.asarray(img_pil)
                 if arr.ndim == 2:
                     return arr
-                # PIL gives RGB, convert to BGR for OpenCV
+                # PIL 给的是 RGB，OpenCV 需要 BGR
                 return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
 
             if tpl is None:
@@ -679,7 +679,7 @@ class Auto:
                 screen_img.convert("RGB") if screen_img.mode != "RGB" else screen_img
             )
 
-            # template matching
+            # 模板匹配
             res = cv2.matchTemplate(scr_bgr, tpl_bgr, cv2.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
             if max_val < threshold:
@@ -690,7 +690,7 @@ class Auto:
             cx = int(top_left[0] + tw / 2)
             cy = int(top_left[1] + th / 2)
 
-            # if region was provided, offset coordinates
+            # 若指定了区域，需把坐标偏移回屏幕坐标系
             if region is not None:
                 rx, ry, _, _ = region
                 cx += int(rx)
@@ -701,8 +701,8 @@ class Auto:
     @staticmethod
     def hotkey(*keys: KeyName, interval: float = 0.1) -> None:
         """
-        Simulate hotkeys, e.g., Auto.hotkey('win', 'd') to show the desktop.
-        Implemented using pynput Controller.pressed + tap.
+        模拟组合键，例如 Auto.hotkey('win', 'd') 显示桌面。
+        内部用 pynput 的 Controller.pressed + tap 实现。
         """
         resolved = [_resolve_key(k) for k in keys]
         if not resolved:

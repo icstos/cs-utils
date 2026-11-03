@@ -45,7 +45,7 @@ class Color(Enum, metaclass=ColorMeta):
 
     # RED = ColorItem(name="red", name_zh="红色", hex="#f44336", rgb=(244, 67, 54))
     PINK = ColorItem(name="pink", name_zh="粉色", hex="#e91e63", rgb=(233, 30, 99))
-    # NOTE: dont need use _ in name
+    # 注意：命名里不需要额外加下划线
     DEEPPURPLE = ColorItem(
         name="deeppurple", name_zh="深紫色", hex="#673ab7", rgb=(103, 58, 183)
     )
@@ -87,13 +87,13 @@ class Color(Enum, metaclass=ColorMeta):
 
     @staticmethod
     def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
-        """Convert RGB tuple (0-255) to hex string."""
+        """把 RGB 元组（0-255）转换为十六进制颜色字符串。"""
         r, g, b = rgb
         return f"#{r:02x}{g:02x}{b:02x}"
 
     @staticmethod
     def hex2rgb(hex_str: str) -> tuple[int, int, int]:
-        """Convert hex color string to RGB tuple."""
+        """把十六进制颜色字符串转换为 RGB 元组。"""
         value = hex_str.lstrip("#")
         lv = len(value)
         r = int(value[0 : lv // 3], 16)

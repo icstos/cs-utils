@@ -153,7 +153,7 @@ class Redis:
             f"Redis(host={kw.get('host')!r}, port={kw.get('port')}, db={kw.get('db')})"
         )
 
-    # ---- String ----
+    # ---- 字符串（String） ----
 
     def set(
         self,
@@ -181,7 +181,7 @@ class Redis:
     def mset(self, mapping: dict[str, RedisValue]) -> bool:
         return bool(self._client.mset(mapping))
 
-    # ---- Key ----
+    # ---- 键（Key） ----
 
     def exists(self, *keys: str) -> int:
         return int(self._client.exists(*keys))
@@ -200,7 +200,7 @@ class Redis:
         cursor, keys = self._client.scan(**kwargs)
         return int(cursor), list(keys)
 
-    # ---- Hash ----
+    # ---- 哈希（Hash） ----
 
     def hset(
         self,
@@ -225,7 +225,7 @@ class Redis:
     def hdel(self, name: str, *keys: str) -> int:
         return int(self._client.hdel(name, *keys))
 
-    # ---- Counter ----
+    # ---- 计数器（Counter） ----
 
     def incr(self, key: str, amount: int = 1) -> int:
         return int(self._client.incrby(key, amount))
@@ -233,7 +233,7 @@ class Redis:
     def decr(self, key: str, amount: int = 1) -> int:
         return int(self._client.decrby(key, amount))
 
-    # ---- List ----
+    # ---- 列表（List） ----
 
     def brpop(
         self,
@@ -264,7 +264,7 @@ class Redis:
 
     get_multi_data = brpop_many  # 兼容旧方法名
 
-    # ---- Pipeline ----
+    # ---- 管道（Pipeline） ----
 
     @contextmanager
     def pipeline(self, transaction: bool = True):

@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-# Ensure src is importable when tests run from repo root
+# 从仓库根目录运行测试时，确保 src 可导入
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -48,7 +48,7 @@ def test_numpy_support_or_skip():
     obj = {"arr": arr, "n": np.int64(5), "f": np.float64(3.14)}
     s = Json.dumps(obj)
 
-    # Parse back the JSON and assert semantic equality (avoid format-dependent checks)
+    # 把 JSON 解析回来做语义比较，避免依赖具体格式
     parsed = Json.loads(s)
     assert parsed["arr"] == [1, 2, 3]
     assert parsed["n"] == 5

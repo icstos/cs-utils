@@ -5,10 +5,10 @@ from openai import OpenAI
 
 
 class AiChat:
-    """Wrapper for chatting with a local llama.cpp server via its OpenAI-compatible API.
+    """通过 OpenAI 兼容接口与本地 llama.cpp 服务对话的封装。
 
-    Start the server first, e.g. ``llama-server -m model.gguf`` (default: http://127.0.0.1:8080).
-    The ``model`` name is often ignored by llama.cpp and can be any placeholder string.
+    需先启动服务，例如 ``llama-server -m model.gguf``（默认 http://127.0.0.1:8080）。
+    llama.cpp 通常忽略 ``model`` 名，可以随便填一个占位字符串。
     """
 
     DEFAULT_BASE_URL = 'http://127.0.0.1:8080/v1'
@@ -37,17 +37,17 @@ class AiChat:
 
     @property
     def messages(self) -> list[dict[str, str]]:
-        """Return a copy of the current conversation history."""
+        """返回当前对话历史的副本。"""
         return list(self._messages)
 
     def reset(self) -> None:
-        """Clear conversation history, keeping the system prompt if configured."""
+        """清空对话历史；若配置了系统提示词则保留。"""
         self._messages = []
         if self.system_prompt:
             self._messages.append({'role': 'system', 'content': self.system_prompt})
 
     def list_models(self) -> list[str]:
-        """List model ids exposed by the server."""
+        """列出服务端暴露的模型 ID。"""
         return [m.id for m in self._client.models.list().data]
 
     def chat(
@@ -58,10 +58,10 @@ class AiChat:
         use_history: bool = True,
         **kwargs: Any,
     ) -> str | Iterator[str]:
-        """Send a user message and return the assistant reply.
+        """发送用户消息并返回助手回复。
 
-        When ``use_history`` is True (default), messages are appended to the
-        session history. When ``stream`` is True, yields text chunks as they arrive.
+        ``use_history`` 为 True（默认）时，消息会追加到会话历史；
+        ``stream`` 为 True 时，边生成边产出文本片段。
         """
         request_messages = self._prepare_messages(user_message, use_history)
 
@@ -80,7 +80,7 @@ class AiChat:
     def complete(
         self, messages: list[dict[str, str]], *, stream: bool = False, **kwargs: Any
     ) -> str | Iterator[str]:
-        """Call the chat API with a custom message list (does not update history)."""
+        """用自定义消息列表调用对话接口（不写入会话历史）。"""
         if stream:
             return self._stream_reply(messages, use_history=False, **kwargs)
 
@@ -130,6 +130,6 @@ def _extract_content(content: Optional[str]) -> str:
 
 
 if __name__ == '__main__':
-    # Example usage
+    # 使用示例
     chat = AiChat(system_prompt='You are a helpful assistant.')
     print(chat.chat('Hello, who are you?'))

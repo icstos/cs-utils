@@ -40,15 +40,15 @@ class Job:
         job_id: str | None = None,
         **trigger_args: Any,
     ) -> None:
-        """Add a job to the scheduler.
+        """向调度器添加任务。
 
         Args:
-            func: Callable to schedule.
-            trigger: JobMode.CRON or JobMode.INTERVAL.
-            args: Positional arguments for the job function.
-            kwargs: Keyword arguments for the job function.
-            job_id: Optional job identifier.
-            trigger_args: Trigger-specific scheduling parameters.
+            func: 待调度的可调用对象。
+            trigger: JobMode.CRON 或 JobMode.INTERVAL。
+            args: 传给任务函数的位置参数。
+            kwargs: 传给任务函数的关键字参数。
+            job_id: 可选的任务标识。
+            trigger_args: 与触发器相关的调度参数。
         """
 
         if trigger not in JobMode:
@@ -64,13 +64,13 @@ class Job:
         )
 
     def add_cron_job(self, func: Any, **cron_args: Any) -> None:
-        """Add a cron-based job."""
+        """添加 cron 型任务。"""
         if not cron_args:
             cron_args = {"hour": 23, "minute": 59}
         self.add_job(func, JobMode.CRON, **cron_args)
 
     def add_interval_job(self, func: Any, **interval_args: Any) -> None:
-        """Add an interval-based job."""
+        """添加固定间隔型任务。"""
         self.add_job(func, JobMode.INTERVAL, **interval_args)
 
     def start(self) -> None:

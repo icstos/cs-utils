@@ -4,7 +4,7 @@ from textwrap import dedent
 
 import pytest
 
-# Ensure src is importable when tests run from repo root
+# 从仓库根目录运行测试时，确保 src 可导入
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -39,7 +39,7 @@ def test_append_filename_flag(tmp_path: Path):
 
 
 def test_sanitizer_removes_nonprintable(tmp_path: Path):
-    # Insert some non-printable bytes into a YAML file but keep valid YAML content
+    # 往 YAML 文件里塞入不可打印字节，但保持 YAML 内容仍然合法
     raw = "a: 1\n"
     noisy = "\x00\x01" + raw + "\x02"
     p = tmp_path / "noisy.yaml"

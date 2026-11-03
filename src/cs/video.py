@@ -13,7 +13,7 @@ DEFAULT_JPEG_QUALITY = 95
 
 
 class Video:
-    """Video helper for OpenCV-based common operations."""
+    """基于 OpenCV 的常用视频操作工具。"""
 
     __slots__ = ("source", "backend", "_capture")
 
@@ -35,7 +35,7 @@ class Video:
         self.release()
 
     def open(self) -> cv2.VideoCapture:
-        """Open the video source and validate the capture."""
+        """打开视频源并校验采集对象是否可用。"""
         if self._capture is not None:
             self.release()
 
@@ -56,7 +56,7 @@ class Video:
         return self._capture
 
     def release(self) -> None:
-        """Release the OpenCV capture handle."""
+        """释放 OpenCV 采集句柄。"""
         if self._capture is not None:
             self._capture.release()
             self._capture = None
@@ -109,7 +109,7 @@ class Video:
         return self._capture_or_open().set(cv2.CAP_PROP_POS_FRAMES, float(index))
 
     def read_frame(self, index: int | None = None) -> Any | None:
-        """Read a single frame by index or from current position."""
+        """按索引读取一帧；未指定索引时从当前位置读取。"""
         capture = self._capture_or_open()
         if index is not None:
             self.set_position(index)
@@ -137,7 +137,7 @@ class Video:
         stop: int | None = None,
         step: int = 1,
     ) -> Iterator[Any]:
-        """Yield frames from the video between start and stop indexes."""
+        """按 start 到 stop 的索引区间逐帧产出视频帧。"""
         if step <= 0:
             raise ValueError("step must be a positive integer")
 

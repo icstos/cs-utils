@@ -1,7 +1,7 @@
-"""Enums & data classes.
+"""枚举与数据类。
 
-Optimised for Python ≥3.11 — uses ``StrEnum``, ``@unique`` on every enum,
-``@dataclass(eq=True)`` with explicit ``__hash__`` for hashable value objects.
+面向 Python ≥3.11 优化：使用 ``StrEnum``，每个枚举都加 ``@unique``，
+可哈希值对象用 ``@dataclass(eq=True)`` 并显式实现 ``__hash__``。
 """
 
 from dataclasses import dataclass
@@ -9,7 +9,7 @@ from enum import Enum, StrEnum, unique
 
 
 class AIMode(StrEnum):
-    """AI model backend identifier (name = value, usable as string)."""
+    """AI 模型后端标识（名称即取值，可直接当字符串用）。"""
 
     ASSISTANT = "智能管家"
     TEACHER = "师长模式"
@@ -18,7 +18,7 @@ class AIMode(StrEnum):
 
 @unique
 class PlatformType(Enum):
-    """Operating system / platform identifiers."""
+    """操作系统 / 平台标识。"""
 
     WINDOWS = "win"
     LINUX = "linux"
@@ -29,7 +29,7 @@ class PlatformType(Enum):
 
 @unique
 class Response(Enum):
-    """HTTP-semantic response codes."""
+    """HTTP 语义的响应码。"""
 
     SUCCESS = 200
     BAD_REQUEST = 400
@@ -42,7 +42,7 @@ class Response(Enum):
 
 @unique
 class Layout(Enum):
-    """Layout orientation."""
+    """布局方向。"""
 
     HORIZONTAL = "horizontal"
     VERTICAL = "vertical"
@@ -50,7 +50,7 @@ class Layout(Enum):
 
 @unique
 class AnnotatorMode(Enum):
-    """Annotator interaction modes."""
+    """标注器交互模式。"""
 
     POINT = 1  # point annotation
     BOX = 2  # axis-aligned bounding box
@@ -64,7 +64,7 @@ class AnnotatorMode(Enum):
 
 @unique
 class UserType(Enum):
-    """User / account roles."""
+    """用户 / 账号角色。"""
 
     ROOT = 1  # system administrator
     LEADER = 2  # team leader
@@ -77,50 +77,50 @@ class UserType(Enum):
 
 @unique
 class Status(Enum):
-    """Record activation status."""
+    """记录启用状态。"""
 
-    ACTIVE = 1  # in use
-    DEPRECATED = 2  # deprecated — avoid further usage
+    ACTIVE = 1  # 正在使用
+    DEPRECATED = 2  # 已弃用，应避免继续使用
 
 
 @unique
 class TaskType(Enum):
-    """Computer vision task categories."""
+    """计算机视觉任务类型。"""
 
-    CLASSIFY = 1  # image classification
-    DETECT = 2  # object detection
-    SEGMENT = 3  # image segmentation
-    POSE = 4  # pose estimation
-    OBB = 5  # oriented bounding-box detection
-    OCR = 6  # optical character recognition
-    SAM = 7
+    CLASSIFY = 1  # 图像分类
+    DETECT = 2  # 目标检测
+    SEGMENT = 3  # 图像分割
+    POSE = 4  # 姿态估计
+    OBB = 5  # 旋转框检测
+    OCR = 6  # 光学字符识别
+    SAM = 7  # 可提示分割（SAM）
 
 
 @unique
 class ModeType(Enum):
-    """Model pipeline execution stages."""
+    """模型流水线执行阶段。"""
 
-    TRAIN = 1  # training
-    VAL = 2  # validation
-    PREDICT = 3  # inference / prediction
-    EXPORT = 4  # model export
-    TRACK = 5  # object tracking
-    BENCHMARK = 6  # performance benchmarking
+    TRAIN = 1  # 训练
+    VAL = 2  # 验证
+    PREDICT = 3  # 推理 / 预测
+    EXPORT = 4  # 模型导出
+    TRACK = 5  # 目标跟踪
+    BENCHMARK = 6  # 性能基准测试
 
 
 @unique
 class ImageStatistic(Enum):
-    """Per-image / per-region grayscale statistics."""
+    """单张图像 / 单个区域的灰度统计。"""
 
-    MAX = 1  # maximum grayscale value
-    MIN = 2  # minimum grayscale value
-    AVG = 3  # average grayscale value
-    DIFF = 4  # max grayscale difference (max − min)
+    MAX = 1  # 最大灰度值
+    MIN = 2  # 最小灰度值
+    AVG = 3  # 平均灰度值
+    DIFF = 4  # 最大灰度差（max − min）
 
 
 @unique
 class Extension(Enum):
-    """Common file extensions."""
+    """常用文件后缀。"""
 
     XLSX = ".xlsx"
     CSV = ".csv"
@@ -131,7 +131,7 @@ class Extension(Enum):
 
 @unique
 class DetectionStrategy(Enum):
-    """Inference strategy for object detectors."""
+    """目标检测器的推理策略。"""
 
     ACCURACY = 1
     SPEED = 2
@@ -139,7 +139,7 @@ class DetectionStrategy(Enum):
 
 @dataclass(eq=True)
 class ImgSize:
-    """Immutable image size — hashed by (width, height)."""
+    """不可变图像尺寸——以 (width, height) 作为哈希键。"""
 
     width: int = -1
     height: int = -1

@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 
 
 # ---------------------------------------------------------------------------
-# Windows – use shell32 SHFileOperationW (FO_DELETE + FOF_ALLOWUNDO)
+# 常用后缀集合（按用途分组）
 # ---------------------------------------------------------------------------
 
-# Ultralytics Platform: JPEG、PNG、WebP、BMP、TIFF、HEIC、AVIF、JP2、DNG、MPO
+# Ultralytics 平台常用图片格式：JPEG、PNG、WebP、BMP、TIFF、HEIC、AVIF、JP2、DNG、MPO
 IMG_SUFFIXS: set[str] = {
     ".jpg",
     ".jpeg",
@@ -33,7 +33,7 @@ IMG_SUFFIXS: set[str] = {
     ".BMP",
 }
 COMMON_IMG_SUFFIX = ".png"
-# Ultralytics Platform: MP4、WebM、MOV、AVI、MKV、M4V
+# Ultralytics 平台常用视频格式：MP4、WebM、MOV、AVI、MKV、M4V
 VIDEO_SUFFIXS: set[str] = {
     ".mp4",
     ".mpg",
@@ -70,8 +70,13 @@ ARCHIVE_SUFFIX_SET: set[str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Windows：调用 shell32 的 SHFileOperationW（FO_DELETE + FOF_ALLOWUNDO）
+# ---------------------------------------------------------------------------
+
+
 def _delete_to_trash_windows(path: Path) -> None:
-    """Send *path* to the Windows recycle bin via the shell32 API."""
+    """把 *path* 通过 shell32 接口移入 Windows 回收站。"""
     import ctypes
     from ctypes import wintypes
 
@@ -93,7 +98,7 @@ def _delete_to_trash_windows(path: Path) -> None:
             ("lpszProgressTitle", ctypes.c_wchar_p),
         ]
 
-    # pFrom requires a double-null-terminated string
+    # pFrom 要求字符串以双 NUL 结尾
     pfrom_buf = str(path.resolve()) + '\0\0'
 
     op = SHFILEOPSTRUCTW()
@@ -114,32 +119,32 @@ def _delete_to_trash_windows(path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Linux – implement the FreeDesktop.org Trash specification
+# Linux：按 FreeDesktop.org 回收站规范实现
 # ---------------------------------------------------------------------------
 
 
 def _get_mount_point(p: Path) -> Path:
-    """Walk upward to find the mount point of *p*."""
+    """向上回溯，找到 *p* 所在的挂载点。"""
     p = p.resolve()
     while not p.is_mount():
         parent = p.parent
-        if parent == p:  # reached root
+        if parent == p:  # 已到达根目录
             break
         p = parent
     return p
 
 
 def _find_trash_dir(path: Path) -> Path:
-    """Return the trash directory that should be used for *path*."""
+    """返回 *path* 应当使用的回收站目录。"""
     home_trash = Path.home() / '.local' / 'share' / 'Trash'
     path_mount = _get_mount_point(path)
     home_mount = _get_mount_point(Path.home())
 
-    # Same partition → home trash
+    # 同一分区 → 用家目录回收站
     if path_mount == home_mount:
         return home_trash
 
-    # Different partition → try .Trash-<uid> or .Trash/<uid>
+    # 跨分区 → 先试 .Trash-<uid>，再试 .Trash/<uid>
     uid = str(path.stat().st_uid)
     alt_trash = path_mount / f'.Trash-{uid}'
 
@@ -150,13 +155,13 @@ def _find_trash_dir(path: Path) -> Path:
     if alt_trash2.is_dir():
         return alt_trash2
 
-    # Neither exists → create .Trash-<uid> at the mount root
+    # 两者都不存在 → 在挂载点根目录创建 .Trash-<uid>
     alt_trash.mkdir(parents=True, exist_ok=True)
     return alt_trash
 
 
 def _unique_trash_name(files_dir: Path, name: str) -> Path:
-    """Return a non-existing destination path inside *files_dir*."""
+    """在 *files_dir* 内返回一个尚不存在的目标路径。"""
     dest = files_dir / name
     if not dest.exists():
         return dest
@@ -170,7 +175,7 @@ def _unique_trash_name(files_dir: Path, name: str) -> Path:
 
 
 def _delete_to_trash_linux(path: Path) -> None:
-    """Send *path* to the Linux Trash (FreeDesktop spec)."""
+    """把 *path* 移入 Linux 回收站（FreeDesktop 规范）。"""
     path = path.resolve()
     trash_dir = _find_trash_dir(path)
     files_dir = trash_dir / 'files'
@@ -181,7 +186,7 @@ def _delete_to_trash_linux(path: Path) -> None:
 
     dest = _unique_trash_name(files_dir, path.name)
 
-    # Write .trashinfo *before* moving (atomicity in spirit)
+    # 先写 .trashinfo 再移动，保证元数据不丢失
     info_path = info_dir / f"{dest.name}.trashinfo"
     deletion_date = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
     info_path.write_text(
@@ -196,12 +201,12 @@ def _delete_to_trash_linux(path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# macOS – use AppleScript to talk to the Finder
+# macOS：通过 AppleScript 交给 Finder 处理
 # ---------------------------------------------------------------------------
 
 
 def _delete_to_trash_macos(path: Path) -> None:
-    """Send *path* to the macOS Trash via Finder."""
+    """把 *path* 通过 Finder 移入 macOS 废纸篓。"""
     import subprocess
 
     script = f'tell application "Finder" to delete POSIX file "{path.resolve()}"'
@@ -211,24 +216,23 @@ def _delete_to_trash_macos(path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# 对外接口
 # ---------------------------------------------------------------------------
 
 
 def delete(path: str | Path) -> None:
     """
-    Move *path* to the system recycle bin / trash.
+    把 *path* 移入系统回收站（废纸篓）。
 
-    This is the moral equivalent of "Delete" in a GUI file manager – the
-    file or folder can be restored later.
+    等价于图形文件管理器里的“删除”，之后仍可还原。
 
     Args:
-        path: A file or directory to delete.
+        path: 待删除的文件或目录。
 
     Raises:
-        FileNotFoundError: *path* does not exist.
-        NotImplementedError: Running on an unsupported operating system.
-        OSError: The underlying OS call failed.
+        FileNotFoundError: *path* 不存在。
+        NotImplementedError: 当前操作系统不受支持。
+        OSError: 底层系统调用失败。
     """
     p = Path(path)
 
@@ -249,13 +253,13 @@ def delete(path: str | Path) -> None:
 
 
 def _read_chunks(file: BinaryIO, size: int = io.DEFAULT_BUFFER_SIZE):
-    """Yield file content chunk by chunk."""
+    """按块迭代读取文件内容。"""
     while chunk := file.read(size):
         yield chunk
 
 
 def hash_file(filename: str | Path) -> str:
-    """Compute MD5 hash of a file."""
+    """计算文件的 MD5 哈希值。"""
     filename = Path(filename)
     h = hashlib.md5()
     with filename.open("rb") as f:
@@ -265,7 +269,7 @@ def hash_file(filename: str | Path) -> str:
 
 
 def find_duplicates(folder: str | Path) -> list[tuple[str, str]]:
-    """Find duplicate files in a folder by MD5 hash."""
+    """按 MD5 哈希查找目录内的重复文件。"""
     hashes: dict[str, str] = {}
     duplicates: list[tuple[str, str]] = []
     for file_path in Path(folder).rglob("*"):
@@ -288,24 +292,24 @@ class File:
 
     @staticmethod
     def delete(path: Path) -> None:
-        """Delete file, ignore if missing."""
+        """删除文件，文件不存在时忽略。"""
         path.unlink(missing_ok=True)
 
     @staticmethod
     def delete_dir(path: Path) -> None:
-        """Recursively delete directory, ignore errors."""
+        """递归删除目录，忽略异常。"""
         shutil.rmtree(path, ignore_errors=True)
 
     @staticmethod
     def delete_to_trash(path: Path) -> None:
-        """Move file to system trash / recycle bin."""
+        """把文件移入系统回收站。"""
         delete(path)
 
     @staticmethod
     def get_file_hash(
         file_path: Path, blocksize: int = 1 << 20, hash_type: str = 'sha256'
     ) -> str:
-        """Compute file hash (sha256 or md5)."""
+        """计算文件哈希（sha256 或 md5）。"""
         if hash_type == 'sha256':
             file_hash = hashlib.sha256()
         else:
@@ -318,7 +322,7 @@ class File:
 
     @staticmethod
     def copy(file_path: Path, new_file_path: Path, keep_state: bool = True) -> None:
-        """Copy file; keep_state=True preserves metadata."""
+        """复制文件；keep_state=True 时一并保留元数据。"""
         if keep_state:
             shutil.copy2(file_path, new_file_path)
         else:
@@ -326,45 +330,45 @@ class File:
 
     @staticmethod
     def cp_dir(src_dir: Path, dst_dir: Path) -> None:
-        """Copy entire directory tree (preserves metadata)."""
+        """复制整个目录树（保留元数据）。"""
         shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
 
     @staticmethod
     def get_size(file_path: Path) -> float:
-        """Get file size in bytes, rounded to 2 decimal places."""
+        """获取文件大小（字节），保留两位小数。"""
         return round(file_path.stat().st_size, 2)
 
     @staticmethod
     def get_size_mb(file_path: Path) -> float:
-        """Get file size in MB, rounded to 2 decimal places."""
+        """获取文件大小（MB），保留两位小数。"""
         return round(file_path.stat().st_size / 1024 / 1024, 2)
 
     @staticmethod
     def set_file_time(path: Path, atime: float, mtime: float) -> None:
-        """Set file access and modification times."""
+        """设置文件的访问时间与修改时间。"""
         path.touch()
-        utime(path, (atime, mtime))  # pathlib has no utime; keep os.utime
+        utime(path, (atime, mtime))  # pathlib 没有 utime，仍需用 os.utime
 
     @staticmethod
     def is_img_file(file_path: Path) -> bool:
-        """Check if file is an image by extension."""
+        """按后缀判断是否为图片文件。"""
         return file_path.suffix in IMG_SUFFIXS
 
     @staticmethod
     def get_txt_path(file_path: Path) -> Path:
-        """Return the corresponding .txt path for a file."""
+        """返回同名的 .txt 路径。"""
         return file_path.with_suffix(".txt")
 
-    # ---- scanning / collection ----
+    # ---- 扫描与收集 ----
 
     @staticmethod
     def get_all_suffix_file(
         file_dir: Path, suffix_set: set[str] | None = None
     ) -> list[Path]:
-        """Get all files under file_dir matching any suffix in suffix_set."""
+        """获取 file_dir 下所有后缀命中 suffix_set 的文件。"""
         suffix_set = suffix_set or {".jpg"}
         file_list: list[Path] = []
-        # single pass with Path.walk() (3.12+) instead of one rglob per suffix
+        # 用 Path.walk()（3.12+）单次遍历，替代每个后缀一次 rglob
         for _dirpath, _dirnames, filenames in file_dir.walk():
             for name in filenames:
                 fp = _dirpath / name
@@ -376,9 +380,9 @@ class File:
     def get_file_name_dict(
         file_dir: Path, suffix_set: set[str] | None = None
     ) -> dict[str, list[Path]]:
-        """Group files by suffix: {'.ext': [Path, ...]}."""
+        """按后缀分组返回文件：{'.ext': [Path, ...]}。"""
         suffix_file_dict: dict[str, list[Path]] = {}
-        # Path.walk() provides files directly, no is_file() filter needed
+        # Path.walk() 直接给出文件名，无需再过滤 is_file()
         for _dirpath, _dirnames, filenames in file_dir.walk():
             for name in filenames:
                 fp = _dirpath / name
@@ -388,18 +392,18 @@ class File:
 
     @staticmethod
     def get_img_file_list(file_path: Path) -> list[Path]:
-        """Get all image files under a directory."""
+        """获取目录下所有图片文件。"""
         return File.get_all_suffix_file(file_path, suffix_set=File.img_suffixs)
 
     @staticmethod
     def get_file_suffix_set(file_dir: str | Path) -> set[str]:
-        """Get the set of file extensions (top-level only)."""
+        """获取文件后缀集合（仅顶层目录）。"""
         file_dir = Path(file_dir)
         return {f.suffix for f in file_dir.iterdir() if f.is_file()}
 
     @staticmethod
     def get_file_stat(path: Path, relative_dir: Path | None = None) -> dict[str, dict]:
-        """Return {key: {size, atime, mtime, ctime, hash}} for a single file."""
+        """返回单个文件的 {key: {size, atime, mtime, ctime, hash}}。"""
         stat = path.stat()
         key = (
             str(path.absolute())
@@ -418,12 +422,12 @@ class File:
 
     @staticmethod
     def get_dir_stat(path: Path) -> dict[str, dict]:
-        """Recursively collect file stats for a file or directory."""
+        """递归收集文件或目录下所有文件的统计信息。"""
         stat_dict: dict[str, dict] = {}
         if path.is_file():
             stat_dict.update(File.get_file_stat(path))
         elif path.is_dir():
-            # Path.walk() is more efficient than manual recursion
+            # Path.walk() 比手写递归更高效
             for dirpath, _dirnames, filenames in path.walk():
                 for filename in filenames:
                     file_path = dirpath / filename
@@ -432,14 +436,14 @@ class File:
 
     @staticmethod
     def rename_by_dir(dir_path: Path) -> None:
-        """Rename all items to 'dirname_originalname'."""
+        """把所有条目重命名为“目录名_原文件名”。"""
         for file in dir_path.iterdir():
             new_name = f"{dir_path.name}_{file.name}"
             file.rename(dir_path / new_name)
 
     @staticmethod
     def mv_file_type_to_dir(old_dir: Path, new_dir: Path) -> None:
-        """Move files from old_dir into new_dir, grouped by extension."""
+        """把 old_dir 中的文件按后缀分类移动到 new_dir。"""
         file_list = list(old_dir.rglob("*hh*/*"))
         file_list = [f for f in file_list if f.is_file()]
         file_type_set: set[str] = set()
@@ -463,9 +467,9 @@ class File:
         dir_name: bool = False,
         show_msg: Callable[..., None] | None = None,
     ) -> None:
-        """Copy files from old_dir into new_dir, grouped by extension."""
+        """把 old_dir 中的文件按后缀分类复制到 new_dir。"""
         show_msg = show_msg or print
-        # Path.walk() provides files directly, no is_file() filter needed
+        # Path.walk() 直接给出文件名，无需再过滤 is_file()
         file_list: list[Path] = []
         for _dirpath, _dirnames, filenames in old_dir.walk():
             for name in filenames:
@@ -489,18 +493,18 @@ class File:
         show_msg(f"File types: {file_type_set}")
         show_msg(f"Files copied: {len(file_list)}")
 
-    # ---- duplicate detection ----
+    # ---- 重复文件检测 ----
 
     @staticmethod
     def repeat_check(
         file_list: list[Path], show_msg: Callable[..., None] | None = None
     ) -> dict[Path, list[Path]]:
-        """Detect duplicate files by MD5 hash."""
+        """按 MD5 哈希检测重复文件。"""
         show_msg = show_msg or print
         hash_to_file: dict[str, Path] = {}
         duplicate_dict: dict[Path, list[Path]] = {}
         for idx, file in enumerate(file_list, 1):
-            # chunked read avoids loading whole file into memory
+            # 分块读取，避免把整个文件载入内存
             file_hash = File.get_file_hash(file, hash_type='md5')
             if idx % 50 == 0:
                 show_msg(f"Checked {idx} files")
@@ -512,7 +516,7 @@ class File:
                 show_msg(f"{file} duplicates {original}")
         return duplicate_dict
 
-    # ---- directory comparison ----
+    # ---- 目录比对 ----
 
     @staticmethod
     def compare_file_dir(
@@ -521,9 +525,9 @@ class File:
         suffix: str = ".txt",
         show_msg: Callable[..., None] | None = None,
     ) -> None:
-        """Check whether file_dir_1 covers all files in file_dir_2 by content."""
+        """按内容检查 file_dir_1 是否覆盖 file_dir_2 的全部文件。"""
         show_msg = show_msg or print
-        # iterdir() limits to top-level files (rglob would descend into subdirs)
+        # iterdir() 只取顶层文件（rglob 会深入到子目录）
         file_set_1 = {f.name for f in file_dir_1.iterdir() if f.is_file()}
         file_not_in_set: set[Path] = set()
         is_covered = True
@@ -544,18 +548,18 @@ class File:
         else:
             show_msg(f"Uncovered files: {len(file_not_in_set)}")
 
-    # ---- archiving ----
+    # ---- 打包归档 ----
 
     @staticmethod
     def make_archive_for_dir(src_dir: str | Path, dst_path: str | Path) -> None:
-        """Create a zip archive from a directory."""
+        """把目录打包为 zip。"""
         shutil.make_archive(
             str(Path(dst_path).with_suffix("")), "zip", str(Path(src_dir))
         )
 
     @staticmethod
     def make_archive(file_list: list[Path], dst_path: Path) -> None:
-        """Create a zip from a file list, preserving directory structure."""
+        """按文件列表打包 zip，保留目录结构。"""
         dst_path = Path(dst_path)
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         dst_path.unlink(missing_ok=True)
@@ -572,11 +576,11 @@ class File:
                             item = _dirpath / name
                             zf.write(item, arcname=str(item.relative_to(file.parent)))
 
-    # ---- async I/O ----
+    # ---- 异步 IO ----
 
     @staticmethod
     async def save(file_obj, file_path: str) -> None:
-        """Save an uploaded file to disk asynchronously."""
+        """把上传的文件异步写入磁盘。"""
         import aiofiles
 
         async with aiofiles.open(file_path, "wb") as f:
@@ -584,7 +588,7 @@ class File:
 
     @staticmethod
     def file_dir_repeat(file_dir: Path, copy_nums: int) -> None:
-        """Data augmentation: copy every file in a folder N times."""
+        """数据增广：把目录内每个文件复制 N 份。"""
         files = list(file_dir.iterdir())
         for f in files:
             if not f.is_file():
@@ -596,10 +600,10 @@ class File:
 
     @staticmethod
     def rename_file_by_dir(file_dir: Path, level: int = 1) -> None:
-        """Batch-rename files by parent directory name.
+        """按父目录名批量重命名文件。
 
-        level=1: rename to 'parentdir_originalname'
-        level=2: recurse into subdirs, rename to 'subdir_originalname'
+        level=1：重命名为“父目录名_原文件名”
+        level=2：递归一层子目录，重命名为“子目录名_原文件名”
         """
         file_dir = Path(file_dir)
         if level == 1:
