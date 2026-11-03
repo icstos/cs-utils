@@ -1,4 +1,4 @@
-"""cs.cv_draw 的行为测试。
+"""cs.cv 绘制能力的行为测试。
 
 覆盖：拷贝/原图两种绘制语义、各图元落笔、样式与 JSON 规格校验、
 图像读写（中文路径、覆盖策略）、掩码与网格，以及 MCP 工具注册。
@@ -13,11 +13,16 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cs.cv import Box, Category, Circle, Line, Point, Polygon
-from cs.cv_draw import (
+from cs.cv import (
     Anno,
+    Box,
     Canvas,
+    Category,
+    Circle,
     ImageError,
+    Line,
+    Point,
+    Polygon,
     ShapeError,
     Stroke,
     Style,
@@ -273,16 +278,22 @@ def test_mcp_server_exposes_tools():
 
     from fastmcp import Client
 
-    from cs.cv_draw.mcp_server import create_server
+    from cs.cv.mcp_server import create_server
 
     async def names() -> list[str]:
         async with Client(create_server()) as client:
             return [tool.name for tool in await client.list_tools()]
 
     assert asyncio.run(names()) == [
-        "cv_draw_info",
-        "cv_draw_shapes",
-        "cv_draw_text",
-        "cv_draw_mask",
-        "cv_draw_grid",
+        "cv_info",
+        "cv_formats",
+        "cv_devices",
+        "cv_draw",
+        "cv_mask",
+        "cv_predict",
+        "cv_track",
+        "cv_train",
+        "cv_val",
+        "cv_export",
+        "cv_annotations",
     ]

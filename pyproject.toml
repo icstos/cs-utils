@@ -12,7 +12,35 @@ dependencies = [
     "psutil",
     "shapely",
     "sqlmodel",
+    "pypdf>=6.0",
+    # NVML 绑定，提供 pynvml 命名空间（cs.nvidia / cs.env）
+    "nvidia-ml-py>=12.535",
+    # SMB2/3 客户端（cs.samba），微软维护
+    "smbprotocol>=1.13",
+    # 对称加密（cs.text.crypto，Fernet = AES-128-CBC + HMAC-SHA256）
+    "cryptography>=42",
+    # 绘制中文文字需要系统字体的 Pillow 后端（cs.cv.draw）
+    "pillow>=10",
 ]
+
+[project.optional-dependencies]
+# PDF 渲染为图片（pdf_render）
+render = ["pymupdf>=1.24.3"]
+# MCP 服务（python -m cs.pdf serve）
+mcp = ["fastmcp>=4.0"]
+# YOLO 模型推理/训练（cs.cv.infer，会一并安装 torch）
+cv = ["ultralytics>=8.3"]
+all = ["pymupdf>=1.24.3", "fastmcp>=4.0", "ultralytics>=8.3"]
+
+[project.scripts]
+cs-pdf = "cs.pdf.__main__:main"
+cs-nvidia = "cs.nvidia.__main__:main"
+cs-samba = "cs.samba.__main__:main"
+cs-config = "cs.config.__main__:main"
+cs-cv = "cs.cv.__main__:main"
+cs-email = "cs.email.__main__:main"
+cs-env = "cs.env.__main__:main"
+cs-text = "cs.text.__main__:main"
 
 # [project.urls]
 # "Homepage" = "https://example.com"
@@ -22,7 +50,17 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["cs"]
+packages = [
+    "cs",
+    "cs.pdf",
+    "cs.nvidia",
+    "cs.samba",
+    "cs.config",
+    "cs.cv",
+    "cs.email",
+    "cs.env",
+    "cs.text",
+]
 package-dir = { "cs" = "src/cs" }
 include-package-data = true
 

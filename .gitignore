@@ -9,6 +9,14 @@ docs
 *.log
 *.db
 
+# 模型导出产物 / 训练输出（cs.cv）
+*.onnx
+*.torchscript
+*.engine
+*_openvino_model/
+runs/
+datasets/
+
 # Virtual environments
 .venv
 .idea

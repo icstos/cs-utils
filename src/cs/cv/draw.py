@@ -1,19 +1,25 @@
-"""图像绘制核心：图像读写、颜色解析与 :class:`Canvas` 绘制上下文。
+"""图像绘制：点、线、框、旋转框、多边形、圆、姿态关键点、文字、掩码、网格。
 
 约定：
 
-- 图像一律使用 OpenCV 的 BGR 顺序；
-- :class:`Canvas` 默认在**副本**上绘制（不修改调用方数组），``inplace=True`` 时直接改原图；
-- 灰度 / 带 alpha 的输入会先转成 BGR —— 灰度图无法原地着色，此时 ``inplace`` 退化为拷贝；
-- 线宽、字号、颜色都支持“自适应”，不必每次手写数字。
+- 图像一律使用 OpenCV 的 BGR 顺序（:func:`resolve_color` 负责 RGB → BGR 修正）；
+- :class:`Canvas` 默认在**副本**上绘制，``inplace=True`` 时直接改原图数组；
+- 灰度 / 带 alpha 的输入会先转成 BGR —— 此时无法原地着色，``inplace`` 退化为拷贝；
+- 线宽、字号、颜色都支持“自适应”，不必每次手写数字；
+- 所有坐标与 :mod:`cs.cv.geometry` 一致：左上角原点、像素为单位。
+
+>>> from cs.cv import Canvas, Box, Point, imread
+>>> Canvas(imread("in.jpg")).box(Box(Point(10, 10), Point(90, 60))).save("out.jpg")
 """
 
 from __future__ import annotations
 
 import functools
+import json
 import math
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, fields
+from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Self
@@ -22,23 +28,31 @@ import cv2
 import numpy as np
 
 from ..color import Color
-from ..cv import Box, Category, Circle, Line, Point, Polygon
 from .errors import ImageError, ShapeError
-from .models import Anno, ColorLike, Shape, Stroke, Style, Text
+from .geometry import Box, Circle, Line, Obb, Point, Polygon, Pose
+from .models import Category, ImageInfo
 
 __all__ = [
+    "Anno",
     "Canvas",
+    "ColorLike",
     "ImageInfo",
+    "Shape",
+    "Stroke",
+    "Style",
+    "Text",
     "image_info",
     "imread",
     "imread_gray",
     "imwrite",
+    "parse_shape",
     "render",
     "resolve_color",
     "to_bgr",
 ]
 
 type StrPath = str | Path
+type ColorLike = tuple[int, int, int] | list[int] | str | int
 
 # JPEG 需要显式质量参数，其余格式交给编解码器默认值
 _JPEG_SUFFIXES = frozenset({".jpg", ".jpeg"})
@@ -55,33 +69,196 @@ _FONT_CANDIDATES = (
 
 
 # ============================================================
-# 图像读写
+# 样式与图元规格
 # ============================================================
 
 
+class Stroke(StrEnum):
+    """线型。"""
+
+    SOLID = "solid"
+    DASHED = "dashed"
+    DOTTED = "dotted"
+
+
 @dataclass(slots=True, frozen=True)
-class ImageInfo:
-    """图像基本信息。"""
+class Style:
+    """一次绘制使用的样式。
 
-    path: Path
-    width: int
-    height: int
-    channels: int
-    dtype: str
+    字段取 ``None`` / ``0`` 时表示“自适应”：线宽按图像尺寸推算，
+    颜色按图元的 ``category_idx`` 从调色板取，字号按线宽推算。
+    """
 
-    @property
-    def is_gray(self) -> bool:
-        return self.channels == 1
+    color: ColorLike | None = None
+    thickness: int | None = None
+    stroke: Stroke = Stroke.SOLID
+    fill: bool = False
+    alpha: float = 0.25
+    label: bool = True
+    label_bg: bool = False
+    font_size: int = 0
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None = None) -> Style:
+        """从 MCP/CLI 的 JSON 对象构造样式，未知字段直接报错。"""
+        payload = dict(data or {})
+        if unknown := set(payload) - {item.name for item in fields(cls)}:
+            raise ShapeError(f"未知样式字段：{', '.join(sorted(unknown))}")
+        if (stroke := payload.get("stroke")) is not None:
+            try:
+                payload["stroke"] = Stroke(stroke)
+            except ValueError:
+                raise ShapeError(
+                    f"stroke 只能是 {[item.value for item in Stroke]}"
+                ) from None
+        if isinstance(color := payload.get("color"), list):
+            if len(color) != 3:
+                raise ShapeError("color 列表需为 [r, g, b]")
+            payload["color"] = tuple(color)
+        if (alpha := payload.get("alpha")) is not None:
+            if not 0.0 <= float(alpha) <= 1.0:
+                raise ShapeError("alpha 需在 0~1 之间")
+            payload["alpha"] = float(alpha)
+        return cls(**payload)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "path": str(self.path),
-            "width": self.width,
-            "height": self.height,
-            "channels": self.channels,
-            "dtype": self.dtype,
-            "gray": self.is_gray,
-        }
+        data = {item.name: getattr(self, item.name) for item in fields(self)}
+        data["stroke"] = self.stroke.value
+        return data
+
+
+@dataclass(slots=True)
+class Text:
+    """文字图元，``point`` 为文字左上角（像素）。"""
+
+    text: str
+    point: Point = field(default_factory=Point)
+    size: int = 0
+
+
+@dataclass(slots=True)
+class Anno:
+    """图元 + 标签文字；标签优先于“类别名: 置信度”的自动生成结果。"""
+
+    shape: Shape
+    label: str = ""
+
+
+type Shape = Point | Line | Box | Obb | Polygon | Circle | Pose | Text | Anno
+"""可绘制的一切：几何图元、文字，以及带标签的包装。"""
+
+
+def parse_shape(spec: Mapping[str, Any]) -> Anno:
+    """把 JSON 规格转成 :class:`Anno`。
+
+    必填 ``kind``（point/line/box/obb/polygon/circle/pose/text，缺省时按字段推断），
+    可选 ``label``、``conf``、``category_idx``（决定调色板取色）。
+    """
+    if not isinstance(spec, Mapping):
+        raise ShapeError(f"图元规格必须是对象，收到 {type(spec).__name__}")
+    kind = str(spec.get("kind") or _guess_kind(spec)).lower()
+    conf = _num(spec, "conf", default=-1.0)
+    category_idx = int(_num(spec, "category_idx", default=0))
+
+    match kind:
+        case "point":
+            shape: Shape = Point(
+                x=_num(spec, "x"),
+                y=_num(spec, "y"),
+                category_idx=category_idx,
+                conf=conf,
+            )
+        case "line":
+            start, end = _points(spec, minimum=2)[:2]
+            shape = Line(start=start, end=end, category_idx=category_idx, conf=conf)
+        case "box":
+            x1, y1, x2, y2 = (_num(spec, key) for key in ("x1", "y1", "x2", "y2"))
+            shape = Box(
+                start=Point(x1, y1),
+                end=Point(x2, y2),
+                category_idx=category_idx,
+                conf=conf,
+            )
+        case "obb":
+            cx, cy, w, h = (_num(spec, key) for key in ("cx", "cy", "w", "h"))
+            shape = Obb(
+                center=Point(cx, cy),
+                size=(w, h),
+                angle=_num(spec, "angle", default=0.0),
+                category_idx=category_idx,
+                conf=conf,
+            )
+        case "polygon":
+            shape = Polygon(
+                points=_points(spec, minimum=3), category_idx=category_idx, conf=conf
+            )
+        case "circle":
+            cx, cy, radius = (_num(spec, key) for key in ("cx", "cy", "r"))
+            if radius <= 0:
+                raise ShapeError("圆半径 r 必须为正数")
+            shape = Circle(
+                center=Point(cx, cy),
+                radius=radius,
+                category_idx=category_idx,
+                conf=conf,
+            )
+        case "pose":
+            points = _points(spec, minimum=1)
+            shape = Pose(points=tuple(points), category_idx=category_idx, conf=conf)
+        case "text":
+            content = str(spec.get("text", "")).strip()
+            if not content:
+                raise ShapeError("文字图元的 text 不能为空")
+            shape = Text(
+                text=content,
+                point=Point(_num(spec, "x"), _num(spec, "y")),
+                size=int(_num(spec, "size", default=0)),
+            )
+        case _:
+            raise ShapeError(f"未知图元类型：{kind}")
+
+    return Anno(shape=shape, label=str(spec.get("label", "")))
+
+
+def _guess_kind(spec: Mapping[str, Any]) -> str:
+    """字段齐全时省略 ``kind`` 也能识别；两点默认按线段、三点及以上按多边形。"""
+    keys = set(spec)
+    if {"x1", "y1", "x2", "y2"} <= keys:
+        return "box"
+    if {"cx", "cy", "r"} <= keys:
+        return "circle"
+    if {"cx", "cy", "w", "h"} <= keys:
+        return "obb"
+    if isinstance(points := spec.get("points"), (list, tuple)):
+        return "line" if len(points) == 2 else "polygon"
+    if "text" in keys:
+        return "text"
+    if {"x", "y"} <= keys:
+        return "point"
+    raise ShapeError("无法从字段推断图元类型，请显式提供 kind")
+
+
+def _num(spec: Mapping[str, Any], key: str, *, default: float | None = None) -> float:
+    if (value := spec.get(key, default)) is None:
+        raise ShapeError(f"缺少字段 {key}")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ShapeError(f"字段 {key} 需为数值，收到 {value!r}") from None
+
+
+def _points(spec: Mapping[str, Any], *, minimum: int) -> list[Point]:
+    raw = spec.get("points")
+    if not isinstance(raw, (list, tuple)) or len(raw) < minimum:
+        raise ShapeError(f"points 至少需要 {minimum} 个 [x, y] 点")
+    if not all(isinstance(item, (list, tuple)) and len(item) >= 2 for item in raw):
+        raise ShapeError("points 需为 [[x, y], ...] 形式")
+    return [Point(float(item[0]), float(item[1])) for item in raw]
+
+
+# ============================================================
+# 图像读写
+# ============================================================
 
 
 def imread(source: StrPath, flags: int = cv2.IMREAD_COLOR) -> np.ndarray:
@@ -89,19 +266,19 @@ def imread(source: StrPath, flags: int = cv2.IMREAD_COLOR) -> np.ndarray:
     path = Path(source)
     if not path.is_file():
         raise ImageError(f"图像不存在：{path}")
-    buffer = np.fromfile(path, dtype=np.uint8)
-    image = cv2.imdecode(buffer, flags)
+    image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), flags)
     if image is None:
         raise ImageError(f"无法解码图像（格式不支持或文件损坏）：{path}")
     return image
 
 
+def imread_gray(source: StrPath) -> np.ndarray:
+    """以单通道方式读取图像，常用于掩码。"""
+    return imread(source, flags=cv2.IMREAD_GRAYSCALE)
+
+
 def imwrite(
-    target: StrPath,
-    image: np.ndarray,
-    *,
-    overwrite: bool = False,
-    quality: int = 95,
+    target: StrPath, image: np.ndarray, *, overwrite: bool = False, quality: int = 95
 ) -> Path:
     """写出图像，默认不覆盖已存在文件；同样规避中文路径问题。"""
     path = Path(target)
@@ -131,11 +308,6 @@ def image_info(source: StrPath) -> ImageInfo:
     )
 
 
-def imread_gray(source: StrPath) -> np.ndarray:
-    """以单通道方式读取图像，常用于掩码。"""
-    return imread(source, flags=cv2.IMREAD_GRAYSCALE)
-
-
 def to_bgr(image: np.ndarray) -> np.ndarray:
     """统一成 3 通道 BGR；已是 BGR 时原样返回（不拷贝）。"""
     if image.ndim == 2:
@@ -149,11 +321,6 @@ def to_bgr(image: np.ndarray) -> np.ndarray:
             return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
         case channels:
             raise ImageError(f"不支持的通道数：{channels}")
-
-
-# ============================================================
-# 颜色与文字
-# ============================================================
 
 
 def resolve_color(
@@ -173,6 +340,11 @@ def resolve_color(
             raise ShapeError(f"无法识别的颜色：{color!r}")
     r, g, b = rgb
     return (int(b), int(g), int(r))
+
+
+# ============================================================
+# 文字
+# ============================================================
 
 
 @dataclass(slots=True, frozen=True)
@@ -228,7 +400,8 @@ class _Font:
                 f"未找到可显示非 ASCII 的字体（已尝试 {', '.join(_FONT_CANDIDATES)}）"
             )
         width, height = self.measure(text)
-        x2, y2 = min(x + width + 2, image.shape[1]), min(y + height + 4, image.shape[0])
+        x2 = min(x + width + 2, image.shape[1])
+        y2 = min(y + height + 4, image.shape[0])
         if x2 <= x or y2 <= y:
             return
         roi = image[y:y2, x:x2]
@@ -292,6 +465,8 @@ class Canvas:
     category: Category | None = None
 
     def __post_init__(self) -> None:
+        if self.style is None:
+            self.style = Style()
         if not isinstance(self.image, np.ndarray) or self.image.size == 0:
             raise ImageError("image 必须是非空 numpy 数组")
         if self.image.dtype != np.uint8:
@@ -465,7 +640,7 @@ class Canvas:
         radius = style.thickness or 4
         cv2.circle(
             self.image,
-            (point.x_int, point.y_int),
+            point.xy_int,
             radius,
             color,
             -1 if style.fill else max(1, radius // 2),
@@ -529,12 +704,7 @@ class Canvas:
         style = self._resolve(style)
         color = self._color(style, box.category_idx)
         corners = np.array(
-            [
-                [box.x_min_int, box.y_min_int],
-                [box.x_max_int, box.y_min_int],
-                [box.x_max_int, box.y_max_int],
-                [box.x_min_int, box.y_max_int],
-            ],
+            [[p.x_int, p.y_int] for p in box.points],
             np.int32,
         )
         self._fill_poly(corners, color, style)
@@ -595,13 +765,30 @@ class Canvas:
             self.polygon(item, style=style, label=label)
         return self
 
+    def obb(
+        self, obb: Obb, *, style: Style | None = None, label: str | None = None
+    ) -> Self:
+        """绘制旋转框：按四个角点画多边形，与分割结果的绘制路径一致。"""
+        style = self._resolve(style)
+        color = self._color(style, obb.category_idx)
+        corners = np.array([[p.x_int, p.y_int] for p in obb.points], np.int32)
+        self._fill_poly(corners, color, style)
+        self._stroke_path(obb.points, color, style, closed=True)
+        self._label_at(
+            self._text_of(obb.category_idx, obb.conf, label),
+            (int(obb.x_min), int(obb.y_min)),
+            color,
+            style,
+        )
+        return self
+
     def circle(
         self, circle: Circle, *, style: Style | None = None, label: str | None = None
     ) -> Self:
         """绘制圆（可选半透明填充）。"""
         style = self._resolve(style)
         color = self._color(style, circle.category_idx)
-        center = (circle.center.x_int, circle.center.y_int)
+        center = circle.center.xy_int
         radius = int(circle.radius)
         self._fill_circle(center, radius, color, style)
         if style.stroke is Stroke.SOLID:
@@ -635,6 +822,40 @@ class Canvas:
             self.circle(item, style=style, label=label)
         return self
 
+    def pose(
+        self, pose: Pose, *, style: Style | None = None, label: str | None = None
+    ) -> Self:
+        """绘制关键点：每个点一个小圆点，可选叠加实例框。
+
+        骨架连线依赖数据集定义的 ``kpt_shape`` / ``skeleton``，这里不臆测，
+        需要时用 :meth:`polyline` 自行连线。
+        """
+        style = self._resolve(style)
+        color = self._color(style, pose.category_idx)
+        has_box = pose.box is not None
+        if pose.box is not None:
+            # 有实例框时标签由框负责绘制，避免重复写字
+            self.box(pose.box, style=style, label=label)
+        for point in pose.points:
+            if point.conf is not None and point.conf <= 0:
+                continue  # 未标注的关键点不画
+            cv2.circle(
+                self.image,
+                point.xy_int,
+                max(2, (style.thickness or 2)),
+                color,
+                -1,
+                cv2.LINE_AA,
+            )
+        if not has_box:
+            self._label_at(
+                self._text_of(pose.category_idx, pose.conf, label),
+                (int(pose.x_min), int(pose.y_min)),
+                color,
+                style,
+            )
+        return self
+
     def text(
         self,
         text: str,
@@ -648,7 +869,7 @@ class Canvas:
         origin = point or Point()
         self._put_text(
             text,
-            (origin.x_int, origin.y_int),
+            origin.xy_int,
             self._color(style, 0),
             size or style.font_size or self._auto_font(style),
             background=style.label_bg,
@@ -663,7 +884,7 @@ class Canvas:
         color: ColorLike | None = None,
         alpha: float = 0.35,
     ) -> Self:
-        """把二值掩码区域半透明着色（分割/热区可视化）。"""
+        """把二值掩码区域半透明着色（分割 / 热区可视化）。"""
         gray = mask if mask.ndim == 2 else cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         if gray.shape != (self.height, self.width):
             gray = cv2.resize(gray, (self.width, self.height), cv2.INTER_NEAREST)
@@ -709,12 +930,16 @@ class Canvas:
                 return self.point(shape, style=style, label=label)
             case Line():
                 return self.line(shape, style=style, label=label)
+            case Obb():
+                return self.obb(shape, style=style, label=label)
             case Box():
                 return self.box(shape, style=style, label=label)
             case Polygon():
                 return self.polygon(shape, style=style, label=label)
             case Circle():
                 return self.circle(shape, style=style, label=label)
+            case Pose():
+                return self.pose(shape, style=style, label=label)
             case _:
                 raise ShapeError(f"不支持的图元类型：{type(shape).__name__}")
 
@@ -749,6 +974,39 @@ def render(
 ) -> np.ndarray:
     """模块级快捷方式，等价于 :meth:`Canvas.render`。"""
     return Canvas.render(image, shapes, style=style, inplace=inplace, category=category)
+
+
+def draw_file(
+    source: StrPath,
+    target: StrPath,
+    shapes: Iterable[Shape],
+    *,
+    style: Style | None = None,
+    category: Category | None = None,
+    overwrite: bool = False,
+) -> Path:
+    """读图 → 绘制 → 存盘，一步完成。"""
+    canvas = Canvas(imread(source), style=style or Style(), category=category)
+    canvas.draw_all(shapes)
+    return canvas.save(target, overwrite=overwrite)
+
+
+def load_shapes(specs: Iterable[Mapping[str, Any]]) -> list[Anno]:
+    """批量解析 JSON 图元规格。"""
+    return [parse_shape(spec) for spec in specs]
+
+
+def shapes_from_json(payload: str | Mapping[str, Any] | Sequence[Any]) -> list[Anno]:
+    """接受 JSON 字符串、``{"shapes": [...]}`` 对象或数组。"""
+    match payload:
+        case str() as text:
+            return load_shapes(json.loads(text))
+        case Mapping() as mapping:
+            return load_shapes(mapping.get("shapes", []))
+        case Sequence() as items:
+            return load_shapes(items)
+        case _:
+            raise ShapeError(f"无法解析图元规格：{type(payload).__name__}")
 
 
 def _sample(
